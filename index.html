@@ -1,0 +1,1402 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DevOps 运维课程 — 从零基础到进阶</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.1/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <style>
+      :root {
+        --bg-primary: #0a0e17;
+        --bg-secondary: #111827;
+        --bg-card: #1a2235;
+        --bg-card-hover: #1e2a42;
+        --bg-code: #0d1117;
+        --border-color: #1e3a5f;
+        --border-glow: #2563eb33;
+        --text-primary: #e2e8f0;
+        --text-secondary: #94a3b8;
+        --text-muted: #64748b;
+        --accent-blue: #3b82f6;
+        --accent-cyan: #06b6d4;
+        --accent-green: #10b981;
+        --accent-orange: #f59e0b;
+        --accent-purple: #8b5cf6;
+        --accent-red: #ef4444;
+        --accent-pink: #ec4899;
+        --accent-teal: #14b8a6;
+        --sidebar-width: 300px;
+        --header-height: 64px;
+        --header-bg: rgba(10, 14, 23, 0.85);
+        --sidebar-bg: rgba(17, 24, 39, 0.6);
+        --toc-bg: rgba(17, 24, 39, 0.6);
+        --td-bg: rgba(26, 34, 53, 0.5);
+        --blockquote-bg: rgba(59, 130, 246, 0.08);
+        --inline-code-bg: rgba(59, 130, 246, 0.12);
+        --card-shadow-hover: rgba(0, 0, 0, 0.3);
+        --card-tag-bg: rgba(100, 116, 139, 0.15);
+        --hero-gradient-from: #e2e8f0;
+        --hero-gradient-to: #94a3b8;
+        --bg-effect-1: rgba(59, 130, 246, 0.06);
+        --bg-effect-2: rgba(6, 182, 212, 0.04);
+        --bg-effect-3: rgba(139, 92, 246, 0.03);
+        --hover-bg: rgba(59, 130, 246, 0.08);
+        --active-bg: rgba(59, 130, 246, 0.12);
+        --nav-hover-bg: rgba(59, 130, 246, 0.1);
+        --badge-bg: rgba(59, 130, 246, 0.15);
+        --badge-border: rgba(59, 130, 246, 0.3);
+        --icon-blue-bg: rgba(59, 130, 246, 0.15);
+        --icon-green-bg: rgba(16, 185, 129, 0.15);
+        --icon-orange-bg: rgba(245, 158, 11, 0.15);
+        --icon-purple-bg: rgba(139, 92, 246, 0.15);
+        --icon-cyan-bg: rgba(6, 182, 212, 0.15);
+      }
+
+      [data-theme="light"] {
+        --bg-primary: #f8fafc;
+        --bg-secondary: #f1f5f9;
+        --bg-card: #ffffff;
+        --bg-card-hover: #f8fafc;
+        --bg-code: #f1f5f9;
+        --border-color: #e2e8f0;
+        --border-glow: #3b82f633;
+        --text-primary: #1e293b;
+        --text-secondary: #475569;
+        --text-muted: #94a3b8;
+        --accent-blue: #2563eb;
+        --accent-cyan: #0891b2;
+        --accent-green: #059669;
+        --accent-orange: #d97706;
+        --accent-purple: #7c3aed;
+        --accent-red: #dc2626;
+        --accent-pink: #db2777;
+        --accent-teal: #0d9488;
+        --header-bg: rgba(248, 250, 252, 0.85);
+        --sidebar-bg: rgba(241, 245, 249, 0.6);
+        --toc-bg: rgba(241, 245, 249, 0.6);
+        --td-bg: rgba(248, 250, 252, 0.5);
+        --blockquote-bg: rgba(37, 99, 235, 0.06);
+        --inline-code-bg: rgba(37, 99, 235, 0.08);
+        --card-shadow-hover: rgba(0, 0, 0, 0.08);
+        --card-tag-bg: rgba(100, 116, 139, 0.1);
+        --hero-gradient-from: #1e293b;
+        --hero-gradient-to: #475569;
+        --bg-effect-1: rgba(59, 130, 246, 0.04);
+        --bg-effect-2: rgba(6, 182, 212, 0.03);
+        --bg-effect-3: rgba(139, 92, 246, 0.02);
+        --hover-bg: rgba(59, 130, 246, 0.06);
+        --active-bg: rgba(59, 130, 246, 0.1);
+        --nav-hover-bg: rgba(59, 130, 246, 0.08);
+        --badge-bg: rgba(37, 99, 235, 0.1);
+        --badge-border: rgba(37, 99, 235, 0.25);
+        --icon-blue-bg: rgba(59, 130, 246, 0.1);
+        --icon-green-bg: rgba(16, 185, 129, 0.1);
+        --icon-orange-bg: rgba(245, 158, 11, 0.1);
+        --icon-purple-bg: rgba(139, 92, 246, 0.1);
+        --icon-cyan-bg: rgba(6, 182, 212, 0.1);
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        font-family: "Noto Sans SC", sans-serif;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        line-height: 1.7;
+        overflow-x: hidden;
+      }
+
+      /* ===== Background Effects ===== */
+      body::before {
+        content: "";
+        position: fixed;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background:
+          radial-gradient(
+            ellipse at 20% 20%,
+            var(--bg-effect-1) 0%,
+            transparent 50%
+          ),
+          radial-gradient(
+            ellipse at 80% 80%,
+            var(--bg-effect-2) 0%,
+            transparent 50%
+          ),
+          radial-gradient(
+            ellipse at 50% 50%,
+            var(--bg-effect-3) 0%,
+            transparent 50%
+          );
+        z-index: -1;
+        animation: bgShift 30s ease-in-out infinite alternate;
+      }
+
+      @keyframes bgShift {
+        0% {
+          transform: translate(0, 0) rotate(0deg);
+        }
+        100% {
+          transform: translate(-2%, -2%) rotate(3deg);
+        }
+      }
+
+      /* ===== Header ===== */
+      .header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: var(--header-height);
+        background: var(--header-bg);
+        backdrop-filter: blur(20px);
+        border-bottom: 1px solid var(--border-color);
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        padding: 0 24px;
+      }
+
+      .header-logo {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        cursor: pointer;
+        text-decoration: none;
+      }
+
+      .header-logo-icon {
+        width: 36px;
+        height: 36px;
+        background: linear-gradient(
+          135deg,
+          var(--accent-blue),
+          var(--accent-cyan)
+        );
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: "JetBrains Mono", monospace;
+        font-weight: 700;
+        font-size: 16px;
+        color: white;
+      }
+
+      .header-logo-text {
+        font-weight: 700;
+        font-size: 18px;
+        color: var(--text-primary);
+      }
+
+      .header-logo-text span {
+        color: var(--accent-cyan);
+      }
+
+      .header-nav {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-left: auto;
+      }
+
+      .header-nav a {
+        color: var(--text-secondary);
+        text-decoration: none;
+        font-size: 13px;
+        padding: 6px 14px;
+        border-radius: 6px;
+        transition: all 0.2s;
+        font-weight: 500;
+      }
+
+      .header-nav a:hover {
+        color: var(--text-primary);
+        background: var(--nav-hover-bg);
+      }
+
+      .menu-toggle {
+        display: none;
+        background: none;
+        border: none;
+        color: var(--text-primary);
+        font-size: 24px;
+        cursor: pointer;
+        padding: 4px;
+        margin-left: 12px;
+      }
+
+      .theme-toggle {
+        background: var(--card-tag-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        width: 36px;
+        height: 36px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        transition: all 0.3s ease;
+        padding: 0;
+        position: relative;
+        overflow: hidden;
+        flex-shrink: 0;
+        margin-left: 8px;
+      }
+
+      .theme-toggle:hover {
+        background: var(--nav-hover-bg);
+        transform: scale(1.05);
+      }
+
+      .theme-icon-dark,
+      .theme-icon-light {
+        position: absolute;
+        transition:
+          opacity 0.3s ease,
+          transform 0.3s ease;
+      }
+
+      .theme-icon-light {
+        opacity: 0;
+        transform: rotate(-90deg) scale(0);
+      }
+
+      [data-theme="light"] .theme-icon-dark {
+        opacity: 0;
+        transform: rotate(90deg) scale(0);
+      }
+
+      [data-theme="light"] .theme-icon-light {
+        opacity: 1;
+        transform: rotate(0deg) scale(1);
+      }
+
+      /* ===== Sidebar ===== */
+      .sidebar {
+        position: fixed;
+        top: var(--header-height);
+        left: 0;
+        width: var(--sidebar-width);
+        height: calc(100vh - var(--header-height));
+        background: var(--sidebar-bg);
+        backdrop-filter: blur(10px);
+        border-right: 1px solid var(--border-color);
+        overflow-y: auto;
+        padding: 20px 0;
+        z-index: 100;
+        transition: transform 0.3s ease;
+      }
+
+      .sidebar::-webkit-scrollbar {
+        width: 4px;
+      }
+
+      .sidebar::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      .sidebar::-webkit-scrollbar-thumb {
+        background: var(--border-color);
+        border-radius: 2px;
+      }
+
+      .sidebar-section {
+        margin-bottom: 8px;
+      }
+
+      .sidebar-section-title {
+        padding: 8px 20px;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        color: var(--text-muted);
+      }
+
+      .sidebar-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 20px;
+        cursor: pointer;
+        transition: all 0.2s;
+        border-left: 3px solid transparent;
+        font-size: 14px;
+        color: var(--text-secondary);
+      }
+
+      .sidebar-item:hover {
+        background: var(--hover-bg);
+        color: var(--text-primary);
+      }
+
+      .sidebar-item.active {
+        background: var(--active-bg);
+        border-left-color: var(--accent-blue);
+        color: var(--accent-blue);
+        font-weight: 500;
+      }
+
+      .sidebar-item-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        flex-shrink: 0;
+      }
+
+      .sidebar-item-text {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      /* ===== Main Content ===== */
+      .main {
+        margin-left: var(--sidebar-width);
+        margin-top: var(--header-height);
+        min-height: calc(100vh - var(--header-height));
+      }
+
+      /* ===== Home Page ===== */
+      .home-page {
+        padding: 60px 40px;
+        max-width: 1100px;
+        margin: 0 auto;
+      }
+
+      .hero {
+        text-align: center;
+        margin-bottom: 60px;
+        animation: fadeInUp 0.6s ease;
+      }
+
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .hero-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--badge-bg);
+        border: 1px solid var(--badge-border);
+        color: var(--accent-blue);
+        padding: 6px 16px;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 500;
+        margin-bottom: 24px;
+      }
+
+      .hero h1 {
+        font-size: 48px;
+        font-weight: 900;
+        line-height: 1.2;
+        margin-bottom: 16px;
+        background: linear-gradient(
+          135deg,
+          var(--hero-gradient-from),
+          var(--hero-gradient-to)
+        );
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .hero p {
+        font-size: 18px;
+        color: var(--text-secondary);
+        max-width: 600px;
+        margin: 0 auto 32px;
+        font-weight: 300;
+      }
+
+      .hero-meta {
+        display: flex;
+        justify-content: center;
+        gap: 24px;
+        color: var(--text-muted);
+        font-size: 13px;
+      }
+
+      .hero-meta span {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      /* ===== Course Cards ===== */
+      .section-title {
+        font-size: 24px;
+        font-weight: 700;
+        margin-bottom: 24px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .section-title::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: linear-gradient(to right, var(--border-color), transparent);
+      }
+
+      .course-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 20px;
+        margin-bottom: 48px;
+      }
+
+      .course-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 14px;
+        padding: 28px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+        animation: fadeInUp 0.6s ease backwards;
+      }
+
+      .course-card:nth-child(1) {
+        animation-delay: 0.05s;
+      }
+      .course-card:nth-child(2) {
+        animation-delay: 0.1s;
+      }
+      .course-card:nth-child(3) {
+        animation-delay: 0.15s;
+      }
+      .course-card:nth-child(4) {
+        animation-delay: 0.2s;
+      }
+      .course-card:nth-child(5) {
+        animation-delay: 0.25s;
+      }
+
+      .course-card::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        border-radius: 14px 14px 0 0;
+        opacity: 0;
+        transition: opacity 0.3s;
+      }
+
+      .course-card:hover::before {
+        opacity: 1;
+      }
+
+      .course-card:hover {
+        background: var(--bg-card-hover);
+        border-color: var(--border-glow);
+        transform: translateY(-4px);
+        box-shadow: 0 12px 40px var(--card-shadow-hover);
+      }
+
+      .course-card[data-color="blue"]::before {
+        background: linear-gradient(
+          to right,
+          var(--accent-blue),
+          var(--accent-cyan)
+        );
+      }
+      .course-card[data-color="green"]::before {
+        background: linear-gradient(
+          to right,
+          var(--accent-green),
+          var(--accent-teal)
+        );
+      }
+      .course-card[data-color="orange"]::before {
+        background: linear-gradient(
+          to right,
+          var(--accent-orange),
+          var(--accent-red)
+        );
+      }
+      .course-card[data-color="purple"]::before {
+        background: linear-gradient(
+          to right,
+          var(--accent-purple),
+          var(--accent-pink)
+        );
+      }
+      .course-card[data-color="cyan"]::before {
+        background: linear-gradient(
+          to right,
+          var(--accent-cyan),
+          var(--accent-blue)
+        );
+      }
+
+      .card-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+        margin-bottom: 16px;
+      }
+
+      .card-icon.blue {
+        background: var(--icon-blue-bg);
+        color: var(--accent-blue);
+      }
+      .card-icon.green {
+        background: var(--icon-green-bg);
+        color: var(--accent-green);
+      }
+      .card-icon.orange {
+        background: var(--icon-orange-bg);
+        color: var(--accent-orange);
+      }
+      .card-icon.purple {
+        background: var(--icon-purple-bg);
+        color: var(--accent-purple);
+      }
+      .card-icon.cyan {
+        background: var(--icon-cyan-bg);
+        color: var(--accent-cyan);
+      }
+
+      .card-title {
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 8px;
+      }
+
+      .card-desc {
+        font-size: 14px;
+        color: var(--text-secondary);
+        margin-bottom: 16px;
+        line-height: 1.6;
+      }
+
+      .card-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .card-tag {
+        font-size: 11px;
+        padding: 3px 10px;
+        border-radius: 4px;
+        background: var(--card-tag-bg);
+        color: var(--text-muted);
+        font-family: "JetBrains Mono", monospace;
+        font-weight: 500;
+      }
+
+      /* ===== Article Page (Markdown Content) ===== */
+      .article-page {
+        display: none;
+        padding: 40px;
+        max-width: 900px;
+        margin: 0 auto;
+      }
+
+      .article-page.active {
+        display: block;
+        animation: fadeInUp 0.4s ease;
+      }
+
+      .article-page h1 {
+        font-size: 36px;
+        font-weight: 900;
+        margin-bottom: 8px;
+        padding-bottom: 16px;
+        border-bottom: 2px solid var(--border-color);
+      }
+
+      .article-page h2 {
+        font-size: 26px;
+        font-weight: 700;
+        margin-top: 48px;
+        margin-bottom: 16px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--border-color);
+        color: var(--accent-cyan);
+      }
+
+      .article-page h3 {
+        font-size: 20px;
+        font-weight: 700;
+        margin-top: 32px;
+        margin-bottom: 12px;
+        color: var(--text-primary);
+      }
+
+      .article-page h4 {
+        font-size: 16px;
+        font-weight: 600;
+        margin-top: 24px;
+        margin-bottom: 8px;
+        color: var(--text-secondary);
+      }
+
+      .article-page p {
+        margin-bottom: 16px;
+        font-size: 15px;
+        line-height: 1.8;
+      }
+
+      .article-page a {
+        color: var(--accent-blue);
+        text-decoration: none;
+        border-bottom: 1px solid transparent;
+        transition: border-color 0.2s;
+      }
+
+      .article-page a:hover {
+        border-bottom-color: var(--accent-blue);
+      }
+
+      .article-page ul,
+      .article-page ol {
+        margin-bottom: 16px;
+        padding-left: 24px;
+      }
+
+      .article-page li {
+        margin-bottom: 6px;
+        font-size: 15px;
+      }
+
+      .article-page blockquote {
+        border-left: 4px solid var(--accent-blue);
+        background: var(--blockquote-bg);
+        padding: 12px 20px;
+        margin: 16px 0;
+        border-radius: 0 8px 8px 0;
+        color: var(--text-secondary);
+      }
+
+      .article-page blockquote p {
+        margin-bottom: 0;
+      }
+
+      .article-page table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 16px 0;
+        font-size: 14px;
+      }
+
+      .article-page th,
+      .article-page td {
+        border: 1px solid var(--border-color);
+        padding: 10px 14px;
+        text-align: left;
+        white-space: nowrap;
+      }
+
+      .article-page th {
+        background: var(--bg-card);
+        font-weight: 600;
+        color: var(--accent-cyan);
+      }
+
+      .article-page td {
+        background: var(--td-bg);
+      }
+
+      .article-page td:nth-child(n + 2) {
+        white-space: normal;
+      }
+
+      .article-page table {
+        overflow-x: auto;
+        display: block;
+      }
+
+      .article-page code {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 13px;
+        background: var(--inline-code-bg);
+        color: var(--accent-cyan);
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+
+      .article-page pre {
+        background: var(--bg-code);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        margin: 16px 0;
+        overflow-x: auto;
+        position: relative;
+      }
+
+      .article-page pre code {
+        display: block;
+        padding: 20px;
+        background: none;
+        color: var(--text-primary);
+        font-size: 13px;
+        line-height: 1.6;
+        overflow-x: auto;
+      }
+
+      .article-page hr {
+        border: none;
+        border-top: 1px solid var(--border-color);
+        margin: 32px 0;
+      }
+
+      .article-page img {
+        max-width: 100%;
+        border-radius: 8px;
+      }
+
+      .article-page strong {
+        color: var(--text-primary);
+        font-weight: 600;
+      }
+
+      /* ===== TOC Indicator ===== */
+      .toc-indicator {
+        position: fixed;
+        top: calc(var(--header-height) + 20px);
+        right: 20px;
+        width: 200px;
+        max-height: calc(100vh - var(--header-height) - 40px);
+        overflow-y: auto;
+        font-size: 12px;
+        color: var(--text-muted);
+        padding: 16px;
+        background: var(--toc-bg);
+        border-radius: 10px;
+        border: 1px solid var(--border-color);
+        backdrop-filter: blur(10px);
+      }
+
+      .toc-indicator-title {
+        font-weight: 700;
+        margin-bottom: 8px;
+        color: var(--text-secondary);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+
+      .toc-link {
+        display: block;
+        padding: 4px 0;
+        color: var(--text-muted);
+        text-decoration: none;
+        transition: color 0.2s;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .toc-link:hover,
+      .toc-link.active {
+        color: var(--accent-blue);
+      }
+
+      .toc-link.h3 {
+        padding-left: 12px;
+      }
+
+      /* ===== Loading ===== */
+      .loading {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 60px;
+        color: var(--text-muted);
+      }
+
+      .loading-spinner {
+        width: 24px;
+        height: 24px;
+        border: 2px solid var(--border-color);
+        border-top-color: var(--accent-blue);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin-right: 12px;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* ===== Responsive ===== */
+      @media (max-width: 1200px) {
+        .toc-indicator {
+          display: none;
+        }
+      }
+
+      @media (max-width: 768px) {
+        .sidebar {
+          transform: translateX(-100%);
+        }
+
+        .sidebar.open {
+          transform: translateX(0);
+        }
+
+        .main {
+          margin-left: 0;
+        }
+
+        .menu-toggle {
+          display: block;
+        }
+
+        .home-page {
+          padding: 30px 20px;
+        }
+
+        .hero h1 {
+          font-size: 32px;
+        }
+
+        .hero p {
+          font-size: 16px;
+        }
+
+        .course-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .article-page {
+          padding: 24px 16px;
+        }
+
+        .header-nav {
+          display: none;
+        }
+      }
+
+      /* ===== Scrollbar ===== */
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+
+      ::-webkit-scrollbar-track {
+        background: var(--bg-primary);
+      }
+
+      ::-webkit-scrollbar-thumb {
+        background: var(--border-color);
+        border-radius: 4px;
+      }
+
+      ::-webkit-scrollbar-thumb:hover {
+        background: var(--text-muted);
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ===== Header ===== -->
+    <header class="header">
+      <a class="header-logo" onclick="showHome()">
+        <div class="header-logo-icon">D</div>
+        <div class="header-logo-text">DevOps <span>Course</span></div>
+      </a>
+      <nav class="header-nav">
+        <a href="https://docs.docker.com/" target="_blank">Docker Docs</a>
+        <a href="https://nginx.org/en/docs/" target="_blank">Nginx Docs</a>
+        <a href="https://wangchujiang.com/reference/" target="_blank">速查表</a>
+      </nav>
+      <button
+        class="theme-toggle"
+        onclick="toggleTheme()"
+        title="切换主题"
+        id="theme-toggle"
+      >
+        <span class="theme-icon-dark">🌙</span>
+        <span class="theme-icon-light">☀️</span>
+      </button>
+      <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+    </header>
+
+    <!-- ===== Sidebar ===== -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">第一阶段 · 基础入门</div>
+      </div>
+      <div class="sidebar-item active" onclick="showHome()" id="nav-home">
+        <div class="sidebar-item-icon">🏠</div>
+        <div class="sidebar-item-text">课程首页</div>
+      </div>
+      <div
+        class="sidebar-item"
+        onclick="loadArticle('stage-1/01-docker/README.md', 'docker')"
+        id="nav-docker"
+      >
+        <div
+          class="sidebar-item-icon"
+          style="background: rgba(59, 130, 246, 0.15); color: #3b82f6"
+        >
+          🐳
+        </div>
+        <div class="sidebar-item-text">Docker 入门到进阶</div>
+      </div>
+      <div
+        class="sidebar-item"
+        onclick="loadArticle('stage-1/02-nginx/README.md', 'nginx')"
+        id="nav-nginx"
+      >
+        <div
+          class="sidebar-item-icon"
+          style="background: rgba(16, 185, 129, 0.15); color: #10b981"
+        >
+          🔷
+        </div>
+        <div class="sidebar-item-text">Nginx 入门到进阶</div>
+      </div>
+      <div
+        class="sidebar-item"
+        onclick="loadArticle('stage-1/03-config-format/README.md', 'config')"
+        id="nav-config"
+      >
+        <div
+          class="sidebar-item-icon"
+          style="background: rgba(245, 158, 11, 0.15); color: #f59e0b"
+        >
+          📄
+        </div>
+        <div class="sidebar-item-text">TOML / YAML / INI 语法</div>
+      </div>
+      <div
+        class="sidebar-item"
+        onclick="loadArticle('stage-1/04-linux-commands/README.md', 'linux')"
+        id="nav-linux"
+      >
+        <div
+          class="sidebar-item-icon"
+          style="background: rgba(139, 92, 246, 0.15); color: #8b5cf6"
+        >
+          ⌨️
+        </div>
+        <div class="sidebar-item-text">Linux 常用运维命令</div>
+      </div>
+      <div
+        class="sidebar-item"
+        onclick="loadArticle('stage-1/05-debian-pkg/README.md', 'debian')"
+        id="nav-debian"
+      >
+        <div
+          class="sidebar-item-icon"
+          style="background: rgba(6, 182, 212, 0.15); color: #06b6d4"
+        >
+          📦
+        </div>
+        <div class="sidebar-item-text">Debian 包管理器</div>
+      </div>
+    </aside>
+
+    <!-- ===== Main Content ===== -->
+    <main class="main" id="main">
+      <!-- Home Page -->
+      <div class="home-page" id="home-page">
+        <div class="hero">
+          <div class="hero-badge">🚀 运维工程师成长路线</div>
+          <h1>从零基础到进阶<br />DevOps 运维课程</h1>
+          <p>
+            系统化学习 Docker、Nginx、Linux
+            命令等核心运维技术，以云原生方式构建现代应用部署能力
+          </p>
+          <div class="hero-meta">
+            <span>📚 5 个核心模块</span>
+            <span>🎯 零基础友好</span>
+            <span>🐳 云原生优先</span>
+          </div>
+        </div>
+
+        <div class="section-title">第一阶段 · 基础入门</div>
+
+        <div class="course-grid">
+          <div
+            class="course-card"
+            data-color="blue"
+            onclick="loadArticle('stage-1/01-docker/README.md', 'docker')"
+          >
+            <div class="card-icon blue">🐳</div>
+            <div class="card-title">Docker 从入门到进阶</div>
+            <div class="card-desc">
+              完整掌握 Docker 容器化技术，包括 Docker Engine、Dockerfile
+              构建和多阶段构建、Docker Compose 编排多服务应用
+            </div>
+            <div class="card-tags">
+              <span class="card-tag">Docker</span>
+              <span class="card-tag">Dockerfile</span>
+              <span class="card-tag">Docker Compose</span>
+              <span class="card-tag">镜像优化</span>
+            </div>
+          </div>
+
+          <div
+            class="course-card"
+            data-color="green"
+            onclick="loadArticle('stage-1/02-nginx/README.md', 'nginx')"
+          >
+            <div class="card-icon green">🔷</div>
+            <div class="card-title">Nginx 从入门到进阶</div>
+            <div class="card-desc">
+              学习 Nginx 的核心功能：静态文件服务、反向代理、负载均衡、SSL/HTTPS
+              配置，以及 Docker 部署最佳实践
+            </div>
+            <div class="card-tags">
+              <span class="card-tag">反向代理</span>
+              <span class="card-tag">负载均衡</span>
+              <span class="card-tag">SSL</span>
+              <span class="card-tag">Docker 部署</span>
+            </div>
+          </div>
+
+          <div
+            class="course-card"
+            data-color="orange"
+            onclick="
+              loadArticle('stage-1/03-config-format/README.md', 'config')
+            "
+          >
+            <div class="card-icon orange">📄</div>
+            <div class="card-title">TOML / YAML / INI 语法</div>
+            <div class="card-desc">
+              掌握三大配置文件格式的语法规则，了解各自的适用场景，能够熟练编写和阅读各类配置文件
+            </div>
+            <div class="card-tags">
+              <span class="card-tag">TOML</span>
+              <span class="card-tag">YAML</span>
+              <span class="card-tag">INI</span>
+              <span class="card-tag">格式对比</span>
+            </div>
+          </div>
+
+          <div
+            class="course-card"
+            data-color="purple"
+            onclick="
+              loadArticle('stage-1/04-linux-commands/README.md', 'linux')
+            "
+          >
+            <div class="card-icon purple">⌨️</div>
+            <div class="card-title">Linux 常用运维命令</div>
+            <div class="card-desc">
+              详解 curl、chmod、ssh、tar、zip、systemd
+              等日常运维必备命令，附有丰富的实战示例
+            </div>
+            <div class="card-tags">
+              <span class="card-tag">curl</span>
+              <span class="card-tag">ssh</span>
+              <span class="card-tag">tar/zip</span>
+              <span class="card-tag">systemd</span>
+            </div>
+          </div>
+
+          <div
+            class="course-card"
+            data-color="cyan"
+            onclick="loadArticle('stage-1/05-debian-pkg/README.md', 'debian')"
+          >
+            <div class="card-icon cyan">📦</div>
+            <div class="card-title">Debian 包管理器</div>
+            <div class="card-desc">
+              全面掌握 apt、dpkg
+              等包管理工具的使用，学会软件源配置、软件安装升级、依赖管理等核心技能
+            </div>
+            <div class="card-tags">
+              <span class="card-tag">apt</span>
+              <span class="card-tag">dpkg</span>
+              <span class="card-tag">软件源</span>
+              <span class="card-tag">镜像配置</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Article Page -->
+      <div class="article-page" id="article-page">
+        <div id="article-content"></div>
+      </div>
+    </main>
+
+    <!-- ===== TOC ===== -->
+    <div class="toc-indicator" id="toc" style="display: none">
+      <div class="toc-indicator-title">目录</div>
+      <div id="toc-content"></div>
+    </div>
+
+    <script>
+      // 主题切换：支持深色/浅色切换，持久化到 localStorage，首次访问跟随系统偏好
+      const THEME_KEY = "devops-course-theme";
+      const LIGHT_HLJS =
+        "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css";
+      const DARK_HLJS =
+        "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css";
+
+      let currentHljsLink = document.getElementById("hljs-theme");
+
+      function getSystemTheme() {
+        return window.matchMedia("(prefers-color-scheme: light)").matches
+          ? "light"
+          : "dark";
+      }
+
+      function applyTheme(theme) {
+        document.documentElement.setAttribute("data-theme", theme);
+        localStorage.setItem(THEME_KEY, theme);
+
+        // 切换代码高亮主题
+        if (currentHljsLink) {
+          currentHljsLink.href = theme === "light" ? LIGHT_HLJS : DARK_HLJS;
+        }
+
+        // 如果当前有已渲染的代码块，重新高亮
+        document.querySelectorAll("pre code").forEach((block) => {
+          hljs.highlightElement(block);
+        });
+      }
+
+      function toggleTheme() {
+        const current =
+          document.documentElement.getAttribute("data-theme") || "dark";
+        const next = current === "dark" ? "light" : "dark";
+        applyTheme(next);
+      }
+
+      // 初始化主题：localStorage > 系统偏好 > 默认深色
+      (function initTheme() {
+        const saved = localStorage.getItem(THEME_KEY);
+        const theme = saved || getSystemTheme();
+        // 创建/获取 highlight.js 主题 link
+        currentHljsLink = document.getElementById("hljs-theme");
+        if (!currentHljsLink) {
+          currentHljsLink = document.createElement("link");
+          currentHljsLink.id = "hljs-theme";
+          currentHljsLink.rel = "stylesheet";
+          document.head.appendChild(currentHljsLink);
+        }
+        // 移除原来的硬编码 link
+        const oldLink = document.querySelector(
+          'link[href*="highlight.js"][href*="styles/"]',
+        );
+        if (oldLink && oldLink !== currentHljsLink) {
+          oldLink.remove();
+        }
+        applyTheme(theme);
+      })();
+
+      // 监听系统主题变化
+      window
+        .matchMedia("(prefers-color-scheme: dark)")
+        .addEventListener("change", (e) => {
+          if (!localStorage.getItem(THEME_KEY)) {
+            applyTheme(e.matches ? "dark" : "light");
+          }
+        });
+
+      // 初始化 marked 配置
+      marked.setOptions({
+        highlight: function (code, lang) {
+          if (lang && hljs.getLanguage(lang)) {
+            return hljs.highlight(code, { language: lang }).value;
+          }
+          return hljs.highlightAuto(code).value;
+        },
+        breaks: true,
+        gfm: true,
+      });
+
+      // 课程数据
+      const courses = {
+        docker: "stage-1/01-docker/README.md",
+        nginx: "stage-1/02-nginx/README.md",
+        config: "stage-1/03-config-format/README.md",
+        linux: "stage-1/04-linux-commands/README.md",
+        debian: "stage-1/05-debian-pkg/README.md",
+      };
+
+      let currentArticle = null;
+
+      // 显示首页
+      function showHome() {
+        document.getElementById("home-page").style.display = "block";
+        document.getElementById("article-page").classList.remove("active");
+        document.getElementById("toc").style.display = "none";
+        setActiveNav("nav-home");
+        currentArticle = null;
+        // 移动端关闭侧边栏
+        document.getElementById("sidebar").classList.remove("open");
+      }
+
+      // 加载并渲染 Markdown 文章
+      async function loadArticle(path, key) {
+        if (currentArticle === key) return;
+        currentArticle = key;
+
+        const homePage = document.getElementById("home-page");
+        const articlePage = document.getElementById("article-page");
+        const content = document.getElementById("article-content");
+
+        // 显示加载状态
+        homePage.style.display = "none";
+        articlePage.classList.remove("active");
+        content.innerHTML =
+          '<div class="loading"><div class="loading-spinner"></div>加载中...</div>';
+
+        setActiveNav("nav-" + key);
+        // 移动端关闭侧边栏
+        document.getElementById("sidebar").classList.remove("open");
+
+        try {
+          const response = await fetch(path);
+          if (!response.ok) throw new Error("文件加载失败");
+          const markdown = await response.text();
+
+          // 渲染 Markdown
+          content.innerHTML = marked.parse(markdown);
+
+          // 显示文章
+          articlePage.classList.add("active");
+
+          // 生成目录
+          generateTOC();
+
+          // 滚动到顶部
+          window.scrollTo(0, 0);
+
+          // 高亮代码块中的特定语言
+          document.querySelectorAll("pre code").forEach((block) => {
+            hljs.highlightElement(block);
+          });
+        } catch (error) {
+          content.innerHTML = `
+                <div style="text-align:center;padding:60px;">
+                    <h2>⚠️ 加载失败</h2>
+                    <p style="color:var(--text-muted);margin-top:12px;">
+                        无法加载课程文件。请确保通过 HTTP 服务器访问此页面（而非直接打开文件）。
+                    </p>
+                    <p style="color:var(--text-muted);margin-top:8px;font-size:13px;">
+                        运行命令：<code style="background:var(--bg-card);padding:4px 8px;border-radius:4px;">python -m http.server 8000</code>
+                    </p>
+                    <p style="color:var(--text-muted);margin-top:4px;font-size:13px;">或</p>
+                    <p style="color:var(--text-muted);font-size:13px;">
+                        <code style="background:var(--bg-card);padding:4px 8px;border-radius:4px;">npx serve .</code>
+                    </p>
+                </div>
+            `;
+          articlePage.classList.add("active");
+        }
+      }
+
+      // 生成右侧目录
+      function generateTOC() {
+        const toc = document.getElementById("toc");
+        const tocContent = document.getElementById("toc-content");
+        const headers = document.querySelectorAll(
+          "#article-content h2, #article-content h3",
+        );
+
+        if (headers.length === 0) {
+          toc.style.display = "none";
+          return;
+        }
+
+        tocContent.innerHTML = "";
+        headers.forEach((header, index) => {
+          const id = "heading-" + index;
+          header.id = id;
+
+          const link = document.createElement("a");
+          link.className = "toc-link" + (header.tagName === "H3" ? " h3" : "");
+          link.href = "#" + id;
+          link.textContent = header.textContent;
+          link.onclick = function (e) {
+            e.preventDefault();
+            header.scrollIntoView({ behavior: "smooth", block: "start" });
+          };
+
+          tocContent.appendChild(link);
+        });
+
+        toc.style.display = "block";
+      }
+
+      // 设置侧边栏激活状态
+      function setActiveNav(id) {
+        document.querySelectorAll(".sidebar-item").forEach((item) => {
+          item.classList.remove("active");
+        });
+        const target = document.getElementById(id);
+        if (target) target.classList.add("active");
+      }
+
+      // 移动端侧边栏切换
+      function toggleSidebar() {
+        document.getElementById("sidebar").classList.toggle("open");
+      }
+
+      // 点击外部关闭侧边栏（移动端）
+      document.addEventListener("click", function (e) {
+        const sidebar = document.getElementById("sidebar");
+        const toggle = document.querySelector(".menu-toggle");
+        if (
+          window.innerWidth <= 768 &&
+          !sidebar.contains(e.target) &&
+          !toggle.contains(e.target)
+        ) {
+          sidebar.classList.remove("open");
+        }
+      });
+
+      // 监听窗口大小变化
+      window.addEventListener("resize", function () {
+        if (window.innerWidth > 768) {
+          document.getElementById("sidebar").classList.remove("open");
+        }
+      });
+    </script>
+  </body>
+</html>
