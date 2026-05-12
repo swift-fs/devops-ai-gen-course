@@ -962,49 +962,128 @@ flask==3.1.0
 gunicorn==23.0.0
 ```
 
-**Dockerfile：**
+**Dockerfile（入门版）：**
+
+> 如果你是 Docker 新手，先用这个简化版本理解每条指令的作用。
+
 ```dockerfile
-# syntax=docker/dockerfile:1
+# 使用 Python 3.12 的精简版镜像作为基础
+# slim 变体只包含 Python 运行所需的最少系统工具，体积约 150MB
+# 对比：python:3.12 完整版约 1GB，alpine 版约 50MB 但可能有兼容问题
+FROM python:3.12-slim
 
-# ===== 构建阶段 =====
-FROM python:3.12-slim AS builder
-
+# 设置工作目录为 /app
+# 后续的 RUN、COPY、CMD 等指令都会在这个目录下执行
+# 如果 /app 不存在，Docker 会自动创建
 WORKDIR /app
 
-# 安装编译依赖
+# 先只拷贝依赖清单文件（而不是整个项目）
+# 原因：Docker 构建是分层的，每一层都有缓存
+# 只要 requirements.txt 没变，这一层的缓存就可以复用，不用重新下载依赖
+# 如果直接 COPY . . 然后再 pip install，每次改一行代码都要重新安装所有依赖
+COPY requirements.txt .
+
+# 安装 Python 依赖包
+# --no-cache-dir：不缓存下载的包文件，减小镜像体积（安装完就不需要缓存了）
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 拷贝项目的所有源代码到容器的 /app 目录
+# 注意：这一步放在 pip install 之后，就是为了利用上面说的缓存机制
+COPY . .
+
+# 声明容器对外提供服务使用的端口
+# 这只是一个"文档说明"，并不会自动发布端口
+# 实际映射还需要在 docker run 时用 -p 参数指定，例如 -p 5000:5000
+EXPOSE 5000
+
+# 容器启动时执行的默认命令
+# 使用 gunicorn（生产级 WSGI 服务器）而不是 Flask 自带的开发服务器
+# --bind 0.0.0.0:5000：监听所有网卡的 5000 端口（不指定 0.0.0.0 则只能容器内访问）
+# --workers 2：启动 2 个工作进程（一般设为 CPU 核心数 × 2 + 1）
+# app:app：加载 app.py 文件中的 app 变量（Flask 实例）
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "app:app"]
+```
+
+**Dockerfile（生产版）：**
+
+> 在入门版基础上增加了：多阶段构建、非 root 用户、健康检查。适合实际部署。
+
+```dockerfile
+# 启用 BuildKit 语法，获得更好的缓存和构建特性
+# syntax=docker/dockerfile:1
+
+# ===================================================================
+# 第一阶段：构建阶段（名称为 builder）
+# 目的：在这里安装编译工具和依赖，最终只把安装结果带到下一阶段
+# 好处：最终的镜像不包含 gcc 等编译工具，体积更小、更安全
+# ===================================================================
+FROM python:3.12-slim AS builder
+
+# 设置工作目录
+WORKDIR /app
+
+# 安装 gcc 编译器
+# 为什么需要？某些 Python 包（如 psycopg2、cffi）包含 C 扩展，需要编译
+# --no-install-recommends：不安装推荐的额外包，保持最小化
+# rm -rf /var/lib/apt/lists/*：安装完立即清理 apt 缓存，减小这一层的体积
 RUN apt-get update && \
     apt-get install -y --no-install-recommends gcc && \
     rm -rf /var/lib/apt/lists/*
 
-# 安装 Python 依赖到独立目录
+# 拷贝依赖清单
 COPY requirements.txt .
+
+# 将 Python 包安装到 /install 目录（而不是默认的系统目录）
+# --prefix=/install：指定安装到自定义路径，方便后续只拷贝这个目录到最终镜像
+# 这样最终镜像里完全没有 gcc、apt 缓存等构建工具
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
-# ===== 运行阶段 =====
+# ===================================================================
+# 第二阶段：运行阶段（这才是最终的镜像）
+# 从全新的基础镜像开始，只拷贝需要的东西
+# ===================================================================
 FROM python:3.12-slim
 
+# 设置工作目录
 WORKDIR /app
 
-# 从构建阶段拷贝已安装的依赖
+# 从 builder 阶段拷贝已编译好的 Python 依赖到系统路径
+# --from=builder：指定从哪个构建阶段拷贝
+# /install 目录下的文件会被合并到 /usr/local 中
 COPY --from=builder /install /usr/local
 
-# 创建非 root 用户
+# 创建一个普通用户来运行应用（安全最佳实践）
+# 默认容器以 root 用户运行，如果应用被攻破，攻击者拥有 root 权限
+# --create-home：同时创建用户的主目录 /home/appuser
 RUN useradd --create-home appuser
+
+# 切换到非 root 用户
+# 之后的所有操作（COPY、RUN、CMD）都以 appuser 身份执行
 USER appuser
 
-# 拷贝应用代码
+# 拷贝应用代码到容器
+# --chown=appuser:appuser：将文件所有者设为 appuser（因为现在以 appuser 身份运行）
 COPY --chown=appuser:appuser . .
 
-# 暴露端口
+# 声明服务端口
 EXPOSE 5000
 
-# 健康检查
+# 健康检查：Docker 会定期执行这个命令来判断容器是否正常
+# --interval=30s：每 30 秒检查一次
+# --timeout=3s：单次检查超过 3 秒视为失败
+# --retries=3：连续失败 3 次才标记为 unhealthy
+# 检查方式：用 Python 访问健康检查接口，成功则返回 0（健康）
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')" || exit 1
 
-# 使用 gunicorn 启动（生产环境推荐）
+# 启动命令
 CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "app:app"]
 ```
+
+> 💡 **如何选择？**
+> - **学习阶段**：使用入门版，文件更短、更容易理解
+> - **部署到生产**：使用生产版，镜像更小（不含编译工具）、更安全（非 root 用户）
+> - 两个版本的 `app.py`、`requirements.txt`、构建命令完全相同
 
 **.dockerignore：**
 ```

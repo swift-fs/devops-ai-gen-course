@@ -1260,6 +1260,27 @@
 
       let currentArticle = null;
 
+      // hash 与课程信息的映射表
+      const routeMap = {
+        docker: { path: "stage-1/01-docker/README.md", navId: "nav-docker" },
+        nginx: { path: "stage-1/02-nginx/README.md", navId: "nav-nginx" },
+        config: {
+          path: "stage-1/03-config-format/README.md",
+          navId: "nav-config",
+        },
+        linux: {
+          path: "stage-1/04-linux-commands/README.md",
+          navId: "nav-linux",
+        },
+        debian: {
+          path: "stage-1/05-debian-pkg/README.md",
+          navId: "nav-debian",
+        },
+      };
+
+      // 标记是否由 hashchange 事件触发的导航（避免重复更新 hash）
+      let isHashNavigation = false;
+
       // 显示首页
       function showHome() {
         document.getElementById("home-page").style.display = "block";
@@ -1267,8 +1288,11 @@
         document.getElementById("toc").style.display = "none";
         setActiveNav("nav-home");
         currentArticle = null;
-        // 移动端关闭侧边栏
         document.getElementById("sidebar").classList.remove("open");
+
+        if (!isHashNavigation) {
+          history.pushState(null, "", window.location.pathname);
+        }
       }
 
       // 加载并渲染 Markdown 文章
@@ -1280,37 +1304,38 @@
         const articlePage = document.getElementById("article-page");
         const content = document.getElementById("article-content");
 
-        // 显示加载状态
         homePage.style.display = "none";
         articlePage.classList.remove("active");
         content.innerHTML =
           '<div class="loading"><div class="loading-spinner"></div>加载中...</div>';
 
         setActiveNav("nav-" + key);
-        // 移动端关闭侧边栏
         document.getElementById("sidebar").classList.remove("open");
+
+        // 更新地址栏 hash（非 hashchange 触发时才更新，避免循环）
+        if (!isHashNavigation) {
+          history.pushState(null, "", "#" + key);
+        }
 
         try {
           const response = await fetch(path);
           if (!response.ok) throw new Error("文件加载失败");
           const markdown = await response.text();
 
-          // 渲染 Markdown
           content.innerHTML = marked.parse(markdown);
-
-          // 显示文章
           articlePage.classList.add("active");
-
-          // 生成目录
           generateTOC();
-
-          // 滚动到顶部
           window.scrollTo(0, 0);
 
-          // 高亮代码块中的特定语言
           document.querySelectorAll("pre code").forEach((block) => {
             hljs.highlightElement(block);
           });
+
+          // 更新页面标题
+          const firstH1 = content.querySelector("h1");
+          if (firstH1) {
+            document.title = firstH1.textContent + " — DevOps 运维课程";
+          }
         } catch (error) {
           content.innerHTML = `
                 <div style="text-align:center;padding:60px;">
@@ -1330,6 +1355,46 @@
           articlePage.classList.add("active");
         }
       }
+
+      // 根据 hash 值导航到对应页面
+      function navigateByHash(hash) {
+        isHashNavigation = true;
+        const raw = hash.replace(/^#\/?/, "");
+
+        // 支持格式：#docker/heading-3（课程+章节）和 #docker（仅课程）
+        const slashIndex = raw.indexOf("/");
+        const key = slashIndex > 0 ? raw.substring(0, slashIndex) : raw;
+        const sectionId = slashIndex > 0 ? raw.substring(slashIndex + 1) : null;
+
+        if (key && routeMap[key]) {
+          loadArticle(routeMap[key].path, key);
+          // 如果指定了章节锚点，等渲染完成后滚动到对应位置
+          if (sectionId) {
+            setTimeout(function () {
+              const target = document.getElementById(sectionId);
+              if (target) {
+                target.scrollIntoView({ behavior: "smooth", block: "start" });
+              }
+            }, 300);
+          }
+        } else {
+          showHome();
+        }
+        isHashNavigation = false;
+      }
+
+      // 页面加载时，根据 URL hash 自动定位
+      (function initRouter() {
+        const hash = window.location.hash;
+        if (hash) {
+          navigateByHash(hash);
+        }
+      })();
+
+      // 监听 hashchange 支持浏览器前进/后退
+      window.addEventListener("hashchange", function () {
+        navigateByHash(window.location.hash);
+      });
 
       // 生成右侧目录
       function generateTOC() {
@@ -1356,6 +1421,10 @@
           link.onclick = function (e) {
             e.preventDefault();
             header.scrollIntoView({ behavior: "smooth", block: "start" });
+            // 更新 URL hash，包含课程 key 和章节 ID
+            if (currentArticle) {
+              history.replaceState(null, "", "#" + currentArticle + "/" + id);
+            }
           };
 
           tocContent.appendChild(link);
