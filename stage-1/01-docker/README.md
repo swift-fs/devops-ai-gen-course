@@ -5,6 +5,30 @@
 
 ---
 
+## 学习目标
+
+完成本教程后，你将能够：
+
+- ✅ 理解容器化的核心概念（镜像、容器、仓库）及其与传统部署的区别
+- ✅ 独立安装和配置 Docker 环境（包括国内镜像加速）
+- ✅ 使用 Docker 命令管理镜像和容器的完整生命周期
+- ✅ 编写生产级 Dockerfile（包括多阶段构建和安全最佳实践）
+- ✅ 使用 Docker Compose 编排多容器应用（数据库 + 缓存 + Web 服务）
+- ✅ 排查常见的 Docker 问题（网络、存储、构建错误等）
+
+## 前置条件
+
+| 条件               | 说明                                       | 必要性 |
+| ------------------ | ------------------------------------------ | ------ |
+| Linux 基础         | 熟悉基本命令行操作（`cd`、`ls`、`cat` 等） | 必需   |
+| Debian/Ubuntu 系统 | 本教程以 Debian/Ubuntu 为主要环境          | 推荐   |
+| 基本网络概念       | 了解 IP、端口、DNS 等基本概念              | 有帮助 |
+| 任意编程语言       | Python/Node.js/Go 基础有助于理解实战案例   | 有帮助 |
+
+> 💡 **没有 Linux 基础？** 建议先完成本课程的 [Linux 常用运维命令](../04-linux-commands/README.md) 章节。
+
+---
+
 ## 目录
 
 - [第一部分：Docker 基础](#第一部分docker-基础)
@@ -26,6 +50,10 @@
   - [3.2 compose.yaml 详解](#32-composeyaml-详解)
   - [3.3 常用命令](#33-常用命令)
   - [3.4 实战案例](#34-实战案例)
+- [第四部分：常见操作指南（How-to）](#第四部分常见操作指南how-to)
+- [第五部分：命令速查表（Reference）](#第五部分命令速查表reference)
+- [第六部分：故障排除](#第六部分故障排除)
+- [总结与下一步](#总结与下一步)
 - [参考链接](#参考链接)
 
 ---
@@ -1585,6 +1613,419 @@ services:
 volumes:
   db-data:
 ```
+
+---
+
+## 第四部分：常见操作指南（How-to）
+
+> 本部分提供常见实际操作的场景化步骤指引。遇到具体问题时，可以直接找到对应章节按步骤操作。
+
+### 4.1 如何清理 Docker 占用的磁盘空间
+
+随着使用时间增长，Docker 会占用大量磁盘空间。以下是系统化清理的方法：
+
+```bash
+# 第 1 步：查看 Docker 当前磁盘占用
+docker system df
+# 输出示例：
+# TYPE            TOTAL   ACTIVE  SIZE      RECLAIMABLE
+# Images          15      5       3.5GB     2.1GB (60%)
+# Containers      8       3       120MB     80MB (66%)
+# Local Volumes   5       3       500MB     200MB (40%)
+# Build Cache     20      0       1.2GB     1.2GB (100%)
+
+# 第 2 步：一键清理所有未使用的资源（镜像、容器、网络、构建缓存）
+docker system prune
+# 确认后删除：已停止的容器、未使用的网络、悬挂镜像、构建缓存
+
+# 第 3 步（彻底清理）：包括未使用的镜像和数据卷
+docker system prune -a --volumes
+# ⚠️ 这会删除所有未运行容器的镜像和数据卷，确保重要数据已备份
+
+# 第 4 步：单独清理各类资源（精细控制）
+docker image prune -a          # 删除所有未使用的镜像
+docker container prune         # 删除所有已停止的容器
+docker volume prune            # 删除所有未使用的数据卷
+docker network prune           # 删除所有未使用的网络
+docker builder prune           # 清理构建缓存
+```
+
+### 4.2 如何查看容器日志并定位问题
+
+```bash
+# 查看容器日志（最基本的调试手段）
+docker logs my-container
+
+# 实时跟踪日志输出
+docker logs -f my-container
+
+# 查看最后 100 行日志
+docker logs --tail 100 my-container
+
+# 查看指定时间范围的日志
+docker logs --since "2024-01-15T10:00:00" my-container
+docker logs --since 30m my-container          # 最近 30 分钟
+
+# 同时查看多个容器的日志（使用 Docker Compose）
+docker compose logs -f
+
+# 只看某个服务的日志
+docker compose logs -f webapp
+
+# 将日志导出到文件分析
+docker logs my-container > container.log 2>&1
+```
+
+### 4.3 如何将本地项目容器化并部署
+
+```bash
+# 第 1 步：在项目根目录创建 .dockerignore
+cat > .dockerignore <<'EOF'
+.git
+node_modules
+__pycache__
+*.pyc
+.env
+*.md
+.vscode
+EOF
+
+# 第 2 步：编写 Dockerfile（以 Node.js 项目为例）
+cat > Dockerfile <<'EOF'
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM node:20-alpine
+WORKDIR /app
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/package*.json ./
+RUN npm ci --production
+EXPOSE 3000
+CMD ["npm", "start"]
+EOF
+
+# 第 3 步：构建并测试
+docker build -t my-app:v1.0 .
+docker run -d -p 3000:3000 --name my-app my-app:v1.0
+curl http://localhost:3000
+
+# 第 4 步：验证无误后，推送到镜像仓库
+docker tag my-app:v1.0 registry.example.com/my-app:v1.0
+docker push registry.example.com/my-app:v1.0
+```
+
+### 4.4 如何在容器之间共享数据
+
+```bash
+# 方法 1：使用命名数据卷（推荐，由 Docker 管理）
+docker volume create shared-data
+docker run -d --name app-a -v shared-data:/data app-image-a
+docker run -d --name app-b -v shared-data:/data app-image-b
+# 两个容器共享 /data 目录
+
+# 方法 2：使用绑定挂载（适合开发环境）
+docker run -d --name app-a -v ./shared:/data app-image-a
+docker run -d --name app-b -v ./shared:/data app-image-b
+
+# 方法 3：使用 Docker Compose 定义共享卷
+cat > compose.yaml <<'EOF'
+services:
+  producer:
+    image: my-producer
+    volumes:
+      - shared-data:/output
+
+  consumer:
+    image: my-consumer
+    volumes:
+      - shared-data:/input
+    depends_on:
+      - producer
+
+volumes:
+  shared-data:
+EOF
+```
+
+### 4.5 如何备份和恢复数据卷
+
+```bash
+# 备份数据卷到 tar 文件
+docker run --rm \
+  -v my-data-volume:/source:ro \
+  -v $(pwd):/backup \
+  alpine tar czf /backup/my-data-backup.tar.gz -C /source .
+
+# 恢复数据卷
+docker run --rm \
+  -v my-data-volume:/target \
+  -v $(pwd):/backup \
+  alpine tar xzf /backup/my-data-backup.tar.gz -C /target
+
+# Windows PowerShell 用户
+docker run --rm -v my-data-volume:/source:ro -v ${PWD}:/backup alpine tar czf /backup/my-data-backup.tar.gz -C /source .
+```
+
+---
+
+## 第五部分：命令速查表（Reference）
+
+> 日常操作中最常用的 Docker 命令，按类别整理，方便快速查阅。
+
+### 5.1 镜像操作
+
+| 命令                              | 说明                   |
+| --------------------------------- | ---------------------- |
+| `docker images`                   | 列出本地所有镜像       |
+| `docker pull <镜像>:<标签>`       | 拉取镜像               |
+| `docker build -t <名称>:<标签> .` | 从 Dockerfile 构建镜像 |
+| `docker rmi <镜像>`               | 删除镜像               |
+| `docker tag <源> <目标>`          | 给镜像打标签           |
+| `docker save -o file.tar <镜像>`  | 导出镜像为 tar 文件    |
+| `docker load -i file.tar`         | 从 tar 文件导入镜像    |
+| `docker image prune -a`           | 清理所有未使用的镜像   |
+| `docker history <镜像>`           | 查看镜像构建历史       |
+| `docker inspect <镜像>`           | 查看镜像详细信息       |
+
+### 5.2 容器操作
+
+| 命令                                                          | 说明                     |
+| ------------------------------------------------------------- | ------------------------ |
+| `docker run -d --name <名称> -p <宿主端口>:<容器端口> <镜像>` | 创建并后台运行容器       |
+| `docker ps`                                                   | 查看运行中的容器         |
+| `docker ps -a`                                                | 查看所有容器（含已停止） |
+| `docker start <容器>`                                         | 启动已停止的容器         |
+| `docker stop <容器>`                                          | 优雅停止容器             |
+| `docker restart <容器>`                                       | 重启容器                 |
+| `docker rm <容器>`                                            | 删除已停止的容器         |
+| `docker rm -f <容器>`                                         | 强制删除运行中的容器     |
+| `docker exec -it <容器> bash`                                 | 进入容器交互终端         |
+| `docker logs -f <容器>`                                       | 实时查看容器日志         |
+| `docker cp <容器>:<路径> <宿主路径>`                          | 从容器拷贝文件到宿主机   |
+| `docker stats`                                                | 查看容器资源占用         |
+| `docker inspect <容器>`                                       | 查看容器详细信息         |
+
+### 5.3 Dockerfile 指令
+
+| 指令          | 说明               | 示例                                            |
+| ------------- | ------------------ | ----------------------------------------------- |
+| `FROM`        | 指定基础镜像       | `FROM python:3.12-slim`                         |
+| `RUN`         | 构建时执行命令     | `RUN apt-get update && apt-get install -y curl` |
+| `COPY`        | 拷贝文件到镜像     | `COPY . /app`                                   |
+| `ADD`         | 拷贝+解压/下载     | `ADD archive.tar.gz /app`                       |
+| `WORKDIR`     | 设置工作目录       | `WORKDIR /app`                                  |
+| `ENV`         | 设置运行时环境变量 | `ENV NODE_ENV=production`                       |
+| `ARG`         | 设置构建时变量     | `ARG VERSION=latest`                            |
+| `EXPOSE`      | 声明端口           | `EXPOSE 8080`                                   |
+| `CMD`         | 容器启动默认命令   | `CMD ["python", "app.py"]`                      |
+| `ENTRYPOINT`  | 容器入口点         | `ENTRYPOINT ["python"]`                         |
+| `VOLUME`      | 声明数据卷         | `VOLUME ["/data"]`                              |
+| `USER`        | 指定运行用户       | `USER appuser`                                  |
+| `HEALTHCHECK` | 健康检查           | `HEALTHCHECK CMD curl -f http://localhost/`     |
+| `LABEL`       | 添加元数据         | `LABEL version="1.0"`                           |
+
+### 5.4 Docker Compose 命令
+
+| 命令                                    | 说明                         |
+| --------------------------------------- | ---------------------------- |
+| `docker compose up -d`                  | 构建并启动所有服务（后台）   |
+| `docker compose down`                   | 停止并删除容器和网络         |
+| `docker compose down -v`                | 停止并删除容器、网络、数据卷 |
+| `docker compose ps`                     | 查看服务状态                 |
+| `docker compose logs -f <服务>`         | 跟踪服务日志                 |
+| `docker compose exec <服务> bash`       | 进入服务容器                 |
+| `docker compose build`                  | 重新构建镜像                 |
+| `docker compose pull`                   | 拉取最新镜像                 |
+| `docker compose config`                 | 验证配置文件语法             |
+| `docker compose restart <服务>`         | 重启指定服务                 |
+| `docker compose up -d --scale <服务>=N` | 扩缩容                       |
+
+---
+
+## 第六部分：故障排除
+
+> 遇到问题时，先在这里查找解决方案。按错误现象分类整理。
+
+### 问题 1：Cannot connect to the Docker daemon
+
+**错误信息：**
+```
+Cannot connect to the Docker daemon at unix:///var/run/docker.sock.
+Is the docker daemon running?
+```
+
+**原因与解决：**
+
+```bash
+# 原因 1：Docker 服务未启动
+sudo systemctl start docker
+sudo systemctl enable docker    # 设置开机自启
+
+# 原因 2：当前用户不在 docker 组中
+sudo usermod -aG docker $USER
+newgrp docker
+# 或者重新登录
+
+# 原因 3：Docker 套接字权限错误
+sudo chmod 666 /var/run/docker.sock
+```
+
+### 问题 2：镜像拉取超时或失败
+
+**错误信息：**
+```
+Error response from daemon: Get "https://registry-1.docker.io/v2/": net/http: request canceled
+```
+
+**解决：**
+
+```bash
+# 方案 1：配置镜像加速源（参考 1.3.3 节）
+sudo tee /etc/docker/daemon.json <<'EOF'
+{
+  "registry-mirrors": [
+    "https://docker.1ms.run",
+    "https://dockerproxy.net"
+  ]
+}
+EOF
+sudo systemctl restart docker
+
+# 方案 2：使用 ECR Public 替代（参考 1.3.4 节）
+docker pull public.ecr.aws/docker/library/nginx:latest
+
+# 方案 3：手动指定完整镜像地址
+docker pull docker.io/library/nginx:latest
+```
+
+### 问题 3：端口已被占用
+
+**错误信息：**
+```
+Error: Bind for 0.0.0.0:8080 failed: port is already allocated
+```
+
+**解决：**
+
+```bash
+# 查看哪个进程占用了端口
+sudo lsof -i :8080
+# 或
+sudo ss -tlnp | grep 8080
+
+# 方案 1：停止占用端口的容器
+docker ps | grep 8080
+docker stop <占用端口的容器>
+
+# 方案 2：更换映射端口
+docker run -d -p 9090:80 nginx    # 改用 9090 端口
+
+# 方案 3：杀掉占用端口的进程
+sudo kill $(sudo lsof -t -i :8080)
+```
+
+### 问题 4：容器启动后立即退出
+
+**排查步骤：**
+
+```bash
+# 第 1 步：查看退出码
+docker ps -a
+# 常见退出码：
+# 0   - 正常退出（可能是前台命令执行完毕）
+# 1   - 应用错误
+# 137 - 被 OOM Killer 杀掉（内存不足）
+# 139 - 段错误
+
+# 第 2 步：查看容器日志
+docker logs <容器名>
+
+# 第 3 步：查看退出详细信息
+docker inspect <容器名> | grep -A 5 "State"
+
+# 常见原因：
+# - Dockerfile 中 CMD 使用了后台运行模式（如 nginx 不加 -g "daemon off;"）
+# - 应用启动时缺少必要的环境变量或配置文件
+# - 端口冲突或数据卷挂载路径不存在
+```
+
+### 问题 5：磁盘空间不足
+
+```bash
+# 查看磁盘使用情况
+df -h
+
+# 查看 Docker 占用
+docker system df
+
+# 清理（参考 4.1 节的完整清理步骤）
+docker system prune -a --volumes
+
+# 检查 Docker 日志是否过大
+sudo du -sh /var/lib/docker/containers/*/*-json.log
+
+# 限制容器日志大小（在 compose.yaml 中配置）
+# logging:
+#   driver: json-file
+#   options:
+#     max-size: "10m"
+#     max-file: "3"
+```
+
+### 问题 6：Dockerfile 构建缓存导致问题
+
+```bash
+# 完全不使用缓存构建
+docker build --no-cache -t my-app:v1.0 .
+
+# 清理构建缓存
+docker builder prune
+
+# 在 Dockerfile 中指定不缓存的点
+# 在可能变化的步骤前添加：
+# ARG CACHEBUST=1
+# RUN apt-get update  # 这一步不会被缓存
+```
+
+---
+
+## 总结与下一步
+
+### 你已经学到了什么
+
+| 部分           | 核心收获                                       |
+| -------------- | ---------------------------------------------- |
+| Docker 基础    | 镜像/容器/仓库三大概念，安装配置，日常管理命令 |
+| Dockerfile     | 编写规范，多阶段构建，生产级最佳实践           |
+| Docker Compose | 多服务编排，开发/生产环境配置                  |
+| How-to 指南    | 磁盘清理、日志排查、项目容器化、数据共享与备份 |
+| 命令速查表     | 日常高频操作的快速参考                         |
+
+### 推荐的学习路径
+
+```
+✅ 你在这里
+│
+├──▶ [Nginx 入门到进阶](../02-nginx/README.md)
+│    学习使用 Nginx 配合 Docker 部署 Web 服务
+│
+├──▶ [配置文件语法](../03-config-format/README.md)
+│    掌握 Docker Compose 使用的 YAML 语法
+│
+└──▶ [Linux 常用运维命令](../04-linux-commands/README.md)
+     深入学习容器调试中常用的 Linux 命令
+```
+
+### 进阶学习建议
+
+1. **实践项目**：尝试将你自己的项目容器化，编写 Dockerfile 和 compose.yaml
+2. **CI/CD 集成**：在 GitHub Actions 中使用 Docker 构建和推送镜像
+3. **容器编排**：学习 Kubernetes 基础，理解从 Docker Compose 到 K8s 的演进
+4. **安全加固**：研究容器镜像扫描（Trivy）、运行时安全（Falco）
 
 ---
 

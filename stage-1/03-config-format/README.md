@@ -4,6 +4,28 @@
 
 ---
 
+## 学习目标
+
+完成本教程后，你将能够：
+
+- ✅ 区分 TOML、YAML、INI 三种配置文件格式的特点和适用场景
+- ✅ 熟练编写 YAML 文件（Docker Compose、GitHub Actions 的基础）
+- ✅ 理解 TOML 的表和数组结构（现代项目配置的新标准）
+- ✅ 快速阅读和修改 INI 格式配置（PHP、MySQL、Git 等）
+- ✅ 避免三种格式中常见的语法陷阱
+
+## 前置条件
+
+| 条件 | 说明 | 必要性 |
+|------|------|--------|
+| 基本文本编辑 | 能使用编辑器编辑纯文本文件 | 必需 |
+| JSON 概念 | 了解键值对、数组、嵌套等基本数据结构 | 推荐 |
+| Docker 基础 | 理解 Docker Compose 需要阅读 YAML 配置 | 有帮助 |
+
+> 💡 **本教程是后续课程的基础**：[Docker](../01-docker/README.md) 和 [Nginx](../02-nginx/README.md) 教程中大量使用 YAML 配置文件。
+
+---
+
 ## 目录
 
 - [概述与对比](#概述与对比)
@@ -11,6 +33,9 @@
 - [第二部分：YAML 语法](#第二部分yaml-语法)
 - [第三部分：INI 语法](#第三部分ini-语法)
 - [实战对比：同一配置的三种写法](#实战对比同一配置的三种写法)
+- [第四部分：常见操作指南（How-to）](#第四部分常见操作指南how-to)
+- [第五部分：语法速查表（Reference）](#第五部分语法速查表reference)
+- [总结与下一步](#总结与下一步)
 - [参考链接](#参考链接)
 
 ---
@@ -855,6 +880,184 @@ rotation_max_files = 10
 [security]
 allowed_origins[] = https://example.com
 allowed_origins[] = https://www.example.com
+```
+
+---
+
+## 第四部分：常见操作指南（How-to）
+
+### 4.1 如何在 YAML 中正确处理多行文本
+
+```yaml
+# 场景：Docker Compose 中的启动命令或环境变量包含多行内容
+
+# | 保留换行符 —— 用于脚本、命令
+setup_script: |
+  #!/bin/bash
+  echo "Starting setup..."
+  apt-get update
+  apt-get install -y curl
+
+# > 折叠换行为空格 —— 用于长段落的描述
+description: >
+  This is a very long description
+  that will be folded into a single
+  line when parsed.
+
+# |- 和 >- 去除末尾换行
+clean_script: |-
+  line 1
+  line 2
+# 结果："line 1\nline 2"（没有末尾 \n）
+```
+
+### 4.2 如何在 TOML 中组织复杂的嵌套配置
+
+```toml
+# 使用点号路径创建深层嵌套，保持文件结构清晰
+
+[default]
+timeout = 30
+retry = 3
+
+[default.logging]
+level = "info"
+output = "stdout"
+
+[production]
+timeout = 60
+retry = 5
+
+[production.logging]
+level = "warning"
+output = "file"
+
+[production.logging.file]
+path = "/var/log/app.log"
+max_size = "500MB"
+rotation = 7
+
+# 如果嵌套太深，考虑使用内联表简化
+[production.database]
+connection = { host = "db.prod.internal", port = 5432, pool_size = 20 }
+```
+
+### 4.3 如何验证配置文件语法是否正确
+
+```bash
+# YAML 验证
+# 方法 1：使用 Python 内置模块
+python -c "import yaml; yaml.safe_load(open('config.yaml'))"
+# 如果没有输出，说明语法正确
+
+# 方法 2：使用在线工具
+# https://www.yamllint.com/
+
+# 方法 3：使用 yamllint 命令行工具
+pip install yamllint
+yamllint config.yaml
+
+# TOML 验证
+# 使用 Python 的 tomllib（Python 3.11+）
+python -c "import tomllib; tomllib.load(open('config.toml', 'rb'))"
+
+# Docker Compose 配置验证
+docker compose config
+
+# Nginx 配置验证
+nginx -t
+```
+
+### 4.4 如何选择合适的配置格式
+
+```
+决策流程：
+
+需要配置文件？
+│
+├── 简单的 key=value？
+│   └── 是 → INI
+│       （如 .gitconfig、php.ini、my.cnf）
+│
+├── 需要数组/嵌套？
+│   ├── YAML → Docker Compose、CI/CD、K8s
+│   │   （行业标准，工具链支持最好）
+│   │
+│   └── TOML → Rust/Go/Python 项目配置
+│       （类型明确，无缩进陷阱）
+│
+└── 不确定？
+    └── YAML（最通用的选择）
+```
+
+---
+
+## 第五部分：语法速查表（Reference）
+
+### 5.1 三种格式语法对比
+
+| 特性 | TOML | YAML | INI |
+|------|------|------|-----|
+| 注释 | `#` | `#` | `#` 或 `;` |
+| 键值对 | `key = value` | `key: value` | `key = value` |
+| 字符串 | `"..."` 或 `'...'` | 可省略引号 | 通常不需要引号 |
+| 整数 | `42` | `42` | 字符串 `"42"` |
+| 浮点数 | `3.14` | `3.14` | 字符串 `"3.14"` |
+| 布尔值 | `true` / `false` | `true` / `false` | 字符串 `"true"` |
+| 数组 | `[1, 2, 3]` | `- 1` `- 2` `- 3` | 不原生支持 |
+| 对象/嵌套 | `[table]` | 缩进 | `[section]` |
+| 多行字符串 | `"""..."""` | `\|` 或 `>` | `\` 续行 |
+| 空值 | 不支持 | `null` 或 `~` | 不支持 |
+
+### 5.2 YAML 特殊语法速查
+
+| 语法 | 说明 | 示例 |
+|------|------|------|
+| `---` | 文档分隔符 | `---` |
+| `&name` | 定义锚点 | `default: &default` |
+| `*name` | 引用锚点 | `<<: *default` |
+| `\|` | 保留换行的多行 | `text: \|` |
+| `>` | 折叠换行的多行 | `text: >` |
+| `!!str` | 强制类型 | `!!str 123` |
+| `~` | 空值 | `value: ~` |
+
+### 5.3 TOML 特殊语法速查
+
+| 语法 | 说明 | 示例 |
+|------|------|------|
+| `[table]` | 定义表 | `[database]` |
+| `[[array]]` | 定义表数组 | `[[servers]]` |
+| `{k=v}` | 内联表 | `point = {x=1, y=2}` |
+| `'''...'''` | 多行字面量字符串 | 不处理转义 |
+| `0x` / `0o` / `0b` | 进制前缀 | `0xFF`, `0o755`, `0b1010` |
+
+---
+
+## 总结与下一步
+
+### 你已经学到了什么
+
+| 部分 | 核心收获 |
+|------|---------|
+| 概述与对比 | 三种格式的定位、优缺点和选择指南 |
+| TOML | 表、数组、内联表、数据类型 |
+| YAML | 缩进规则、多行文本、锚点与别名、常见陷阱 |
+| INI | 节、键值对、常见配置文件（php.ini、my.cnf、.gitconfig） |
+| How-to | 多行文本处理、嵌套组织、语法验证、格式选择 |
+
+### 推荐的学习路径
+
+```
+✅ 你在这里
+│
+├──▶ [Docker 入门到进阶](../01-docker/README.md)
+│    实战练习 YAML —— 编写 Docker Compose 配置
+│
+├──▶ [Nginx 入门到进阶](../02-nginx/README.md)
+│    阅读 Nginx 的 INI 风格配置文件
+│
+└──▶ [Linux 常用运维命令](../04-linux-commands/README.md)
+     在实际运维中编辑各类配置文件
 ```
 
 ---

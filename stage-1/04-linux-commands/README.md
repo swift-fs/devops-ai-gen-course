@@ -4,6 +4,29 @@
 
 ---
 
+## 学习目标
+
+完成本教程后，你将能够：
+
+- ✅ 使用 `curl` 发送各类 HTTP 请求（GET/POST/PUT/DELETE），进行 API 调试
+- ✅ 使用 `chmod` 正确设置文件和目录的权限
+- ✅ 配置 SSH 免密登录、端口转发和安全加固
+- ✅ 使用 `tar` 和 `zip` 进行文件归档压缩与解压
+- ✅ 使用 `systemd`（systemctl/journalctl）管理 Linux 服务
+- ✅ 运用常用命令进行系统排查（日志分析、进程管理、网络调试）
+
+## 前置条件
+
+| 条件 | 说明 | 必要性 |
+|------|------|--------|
+| Linux 系统 | 需要在 Linux 环境中练习（推荐 Debian/Ubuntu） | 必需 |
+| 基本命令行 | 了解 `cd`、`ls`、`pwd`、`sudo` 等基本命令 | 必需 |
+| 网络概念 | 了解 IP 地址、端口、HTTP 协议基础 | 推荐 |
+
+> 💡 **建议结合其他章节学习**：本教程中的 curl 和 systemd 命令在 [Docker](../01-docker/README.md) 和 [Nginx](../02-nginx/README.md) 教程中会频繁使用。
+
+---
+
 ## 目录
 
 - [1. curl — HTTP 请求工具](#1-curl--http-请求工具)
@@ -13,6 +36,9 @@
 - [5. zip / unzip — ZIP 压缩](#5-zip--unzip--zip-压缩)
 - [6. systemd — 服务管理](#6-systemd--服务管理)
 - [附录：其他常用命令速查](#附录其他常用命令速查)
+- [常见操作指南（How-to）](#常见操作指南how-to)
+- [命令速查表（Reference）](#命令速查表reference)
+- [总结与下一步](#总结与下一步)
 - [参考链接](#参考链接)
 
 ---
@@ -1230,6 +1256,168 @@ nslookup example.com        # DNS 查询（更简单）
 # 下载文件
 wget https://example.com/file.zip            # 下载文件
 wget -c https://example.com/file.zip         # 断点续传
+```
+
+---
+
+## 常见操作指南（How-to）
+
+### 如何快速排查服务异常
+
+```bash
+# 第 1 步：检查服务状态
+sudo systemctl status <服务名>
+# 关注 Active 行和最后的日志输出
+
+# 第 2 步：查看详细日志
+sudo journalctl -u <服务名> --since "10 minutes ago" -n 50
+
+# 第 3 步：检查端口是否正常监听
+sudo ss -tlnp | grep <端口号>
+
+# 第 4 步：检查进程是否存活
+ps aux | grep <进程名>
+
+# 第 5 步：检查资源使用
+free -h              # 内存
+df -h                # 磁盘
+top -bn1 | head      # CPU
+```
+
+### 如何安全地远程传输大量文件
+
+```bash
+# 方法 1：tar + SSH 流式传输（推荐，不占用本地额外空间）
+tar -czf - /path/to/large-dir/ | ssh user@remote "cat > /backup/large-dir.tar.gz"
+
+# 方法 2：rsync 增量同步（适合定期备份）
+rsync -avz --progress /local/dir/ user@remote:/remote/dir/
+# -a 归档模式（保留权限、时间戳等）
+# -v 详细输出
+# -z 压缩传输
+# --progress 显示进度
+
+# 方法 3：scp 简单传输
+scp -r /local/dir/ user@remote:/remote/dir/
+```
+
+### 如何编写一个完整的 systemd 服务
+
+```bash
+# 以 Node.js 应用为例
+
+# 第 1 步：创建服务文件
+sudo tee /etc/systemd/system/myapp.service <<'EOF'
+[Unit]
+Description=My Node.js Application
+After=network.target
+
+[Service]
+Type=simple
+User=nodeuser
+WorkingDirectory=/opt/myapp
+ExecStart=/usr/bin/node /opt/myapp/server.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+Environment=PORT=3000
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# 第 2 步：重新加载并启动
+sudo systemctl daemon-reload
+sudo systemctl enable --now myapp
+
+# 第 3 步：验证
+sudo systemctl status myapp
+sudo journalctl -u myapp -f
+```
+
+---
+
+## 命令速查表（Reference）
+
+### curl 常用参数
+
+| 参数 | 说明 |
+|------|------|
+| `-X METHOD` | 指定请求方法 |
+| `-H "Key: Value"` | 添加请求头 |
+| `-d 'data'` | 发送请求体 |
+| `-F "file=@path"` | 上传文件 |
+| `-u user:pass` | Basic 认证 |
+| `-b "cookie"` | 发送 Cookie |
+| `-L` | 跟踪重定向 |
+| `-s` | 静默模式 |
+| `-v` | 显示详细过程 |
+| `-I` | 只显示响应头 |
+| `-o file` | 保存到文件 |
+| `-w format` | 自定义输出格式 |
+
+### chmod 常用权限值
+
+| 数字 | 权限 | 典型用途 |
+|------|------|---------|
+| `755` | `rwxr-xr-x` | 可执行脚本、目录 |
+| `644` | `rw-r--r--` | 普通文件（HTML、配置） |
+| `700` | `rwx------` | 私有目录（~/.ssh/） |
+| `600` | `rw-------` | 敏感文件（密钥、.env） |
+| `400` | `r--------` | 只读密钥文件 |
+
+### tar 命令参数
+
+| 操作 | 命令 |
+|------|------|
+| 创建 .tar.gz | `tar -czf file.tar.gz 目录/` |
+| 解压 .tar.gz | `tar -xzf file.tar.gz` |
+| 解压到指定目录 | `tar -xzf file.tar.gz -C /目录/` |
+| 查看内容 | `tar -tzf file.tar.gz` |
+| 排除文件 | `tar -czf file.tar.gz --exclude='pattern' 目录/` |
+
+### systemctl 常用命令
+
+| 命令 | 说明 |
+|------|------|
+| `systemctl start <服务>` | 启动服务 |
+| `systemctl stop <服务>` | 停止服务 |
+| `systemctl restart <服务>` | 重启服务 |
+| `systemctl reload <服务>` | 重新加载配置 |
+| `systemctl status <服务>` | 查看状态 |
+| `systemctl enable <服务>` | 设置开机自启 |
+| `systemctl disable <服务>` | 取消开机自启 |
+| `systemctl is-active <服务>` | 检查是否运行 |
+| `systemctl --failed` | 查看失败的服务 |
+| `journalctl -u <服务> -f` | 跟踪服务日志 |
+
+---
+
+## 总结与下一步
+
+### 你已经学到了什么
+
+| 命令 | 核心功能 |
+|------|---------|
+| `curl` | HTTP 请求调试、API 测试、文件下载 |
+| `chmod` | 文件权限管理（数字方式和符号方式） |
+| `ssh` | 远程连接、免密登录、端口转发、安全加固 |
+| `tar` / `zip` | 文件归档压缩与解压 |
+| `systemd` | 服务管理、日志查看、自定义服务 |
+
+### 推荐的学习路径
+
+```
+✅ 你在这里
+│
+├──▶ [Docker 入门到进阶](../01-docker/README.md)
+│    实践 systemctl 管理 Docker 服务
+│
+├──▶ [Nginx 入门到进阶](../02-nginx/README.md)
+│    使用 curl 测试 Nginx 配置、用 systemd 管理 Nginx 服务
+│
+└──▶ [Debian 包管理器](../05-debian-pkg/README.md)
+     学习使用 apt 安装和管理本教程中的各种工具
 ```
 
 ---

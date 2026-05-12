@@ -5,6 +5,28 @@
 
 ---
 
+## 学习目标
+
+完成本教程后，你将能够：
+
+- ✅ 理解 Debian 包管理器的层级结构（apt → dpkg → .deb）
+- ✅ 使用 `apt` 进行软件的搜索、安装、升级和卸载
+- ✅ 使用 `dpkg` 直接操作 `.deb` 文件并处理依赖问题
+- ✅ 配置软件源和国内镜像加速
+- ✅ 处理常见的包管理问题（依赖冲突、锁定版本、修复损坏）
+
+## 前置条件
+
+| 条件 | 说明 | 必要性 |
+|------|------|--------|
+| Linux 基础 | 熟悉命令行操作和 `sudo` 的使用 | 必需 |
+| Debian/Ubuntu 系统 | 本教程的命令专门针对 Debian 系发行版 | 必需 |
+| 网络连接 | 安装和更新软件需要联网 | 必需 |
+
+> 💡 **本教程是环境搭建的基础**：后续的 [Docker](../01-docker/README.md) 和 [Nginx](../02-nginx/README.md) 教程都需要先通过 apt 安装相关软件。
+
+---
+
 ## 目录
 
 - [1. 包管理器概述](#1-包管理器概述)
@@ -13,6 +35,10 @@
 - [4. dpkg — 底层包管理工具](#4-dpkg--底层包管理工具)
 - [5. 软件源配置](#5-软件源配置)
 - [6. 常见运维场景](#6-常见运维场景)
+- [常见操作指南（How-to）](#常见操作指南how-to)
+- [命令速查表（Reference）](#命令速查表reference)
+- [故障排除](#故障排除)
+- [总结与下一步](#总结与下一步)
 - [参考链接](#参考链接)
 
 ---
@@ -560,6 +586,205 @@ sudo unattended-upgrade -v
 
 # 配置自动安全更新
 sudo dpkg-reconfigure -plow unattended-upgrades
+```
+
+---
+
+## 常见操作指南（How-to）
+
+### 如何在一台新服务器上快速搭建基础环境
+
+```bash
+# 第 1 步：更新系统
+sudo apt update && sudo apt upgrade -y
+
+# 第 2 步：安装常用工具
+sudo apt install -y \
+    curl wget git vim htop tmux tree unzip \
+    ca-certificates gnupg lsb-release
+
+# 第 3 步：清理
+sudo apt autoremove -y && sudo apt autoclean
+```
+
+### 如何安装指定版本的软件包
+
+```bash
+# 第 1 步：查看可用版本
+apt-cache policy nginx
+
+# 第 2 步：安装指定版本
+sudo apt install nginx=1.26.0-1~bookworm
+
+# 第 3 步：锁定版本防止意外升级
+sudo apt-mark hold nginx
+
+# 第 4 步：查看被锁定的包
+apt-mark showhold
+
+# 需要升级时解除锁定
+sudo apt-mark unhold nginx
+```
+
+### 如何添加第三方软件源
+
+```bash
+# 以 Node.js 官方源为例
+
+# 第 1 步：安装必要工具
+sudo apt install -y ca-certificates curl gnupg
+
+# 第 2 步：导入 GPG 密钥
+curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | \
+  sudo gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
+
+# 第 3 步：添加源
+echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] \
+  https://deb.nodesource.com/node_20.x nodistro main" | \
+  sudo tee /etc/apt/sources.list.d/nodesource.list
+
+# 第 4 步：更新并安装
+sudo apt update
+sudo apt install -y nodejs
+```
+
+---
+
+## 命令速查表（Reference）
+
+### apt 常用命令
+
+| 命令 | 说明 |
+|------|------|
+| `sudo apt update` | 更新软件源索引 |
+| `sudo apt install <包名>` | 安装软件包 |
+| `sudo apt remove <包名>` | 卸载软件包（保留配置） |
+| `sudo apt purge <包名>` | 彻底卸载（含配置文件） |
+| `sudo apt upgrade` | 升级所有已安装包 |
+| `sudo apt full-upgrade` | 完整升级（处理依赖变更） |
+| `sudo apt autoremove` | 清理不需要的依赖 |
+| `apt search <关键词>` | 搜索软件包 |
+| `apt show <包名>` | 查看包详情 |
+| `apt list --installed` | 列出已安装的包 |
+| `apt list --upgradable` | 列出可升级的包 |
+| `sudo apt clean` | 清理下载缓存 |
+| `sudo apt-mark hold <包名>` | 锁定包版本 |
+| `sudo apt-mark unhold <包名>` | 解除版本锁定 |
+
+### dpkg 常用命令
+
+| 命令 | 说明 |
+|------|------|
+| `sudo dpkg -i <file.deb>` | 安装 .deb 文件 |
+| `sudo dpkg -r <包名>` | 卸载（保留配置） |
+| `sudo dpkg --purge <包名>` | 彻底卸载 |
+| `dpkg -l` | 列出所有已安装的包 |
+| `dpkg -l \| grep <关键词>` | 搜索已安装的包 |
+| `dpkg -L <包名>` | 查看包安装了哪些文件 |
+| `dpkg -S <文件路径>` | 查看文件属于哪个包 |
+| `dpkg -I <file.deb>` | 查看 .deb 文件信息 |
+| `dpkg -c <file.deb>` | 查看 .deb 文件内容 |
+
+---
+
+## 故障排除
+
+### 问题 1：dpkg: error processing package
+
+**错误信息：**
+```
+dpkg: error processing package xxx (--configure):
+ subprocess installed post-installation script returned error exit status 1
+```
+
+**解决：**
+```bash
+# 方法 1：重新配置所有未完成的包
+sudo dpkg --configure -a
+
+# 方法 2：强制删除有问题的包
+sudo dpkg --remove --force-remove-reinstreq <包名>
+
+# 方法 3：清理并重新安装
+sudo apt-get remove --purge <包名>
+sudo apt-get autoremove
+sudo apt-get clean
+sudo apt update && sudo apt install <包名>
+```
+
+### 问题 2：Could not get lock /var/lib/dpkg/lock
+
+**错误信息：**
+```
+Could not get lock /var/lib/dpkg/lock-frontend - open (11: Resource temporarily unavailable)
+```
+
+**原因：** 另一个 apt/dpkg 进程正在运行。
+
+**解决：**
+```bash
+# 第 1 步：检查是否有其他 apt 进程
+ps aux | grep -E 'apt|dpkg'
+
+# 第 2 步：等待它完成，或者杀掉它
+sudo kill <PID>
+
+# 第 3 步：如果进程已不存在但锁文件还在
+sudo rm /var/lib/dpkg/lock-frontend
+sudo rm /var/lib/dpkg/lock
+sudo rm /var/cache/apt/archives/lock
+sudo dpkg --configure -a
+```
+
+### 问题 3：依赖关系不满足
+
+**错误信息：**
+```
+The following packages have unmet dependencies:
+ xxx : Depends: yyy but it is not going to be installed
+```
+
+**解决：**
+```bash
+# 方法 1：让 apt 自动修复
+sudo apt-get install -f
+
+# 方法 2：更新源后重试
+sudo apt update && sudo apt install <包名>
+
+# 方法 3：查看具体依赖关系
+apt depends <包名>
+apt-cache policy <依赖包名>
+```
+
+---
+
+## 总结与下一步
+
+### 你已经学到了什么
+
+| 部分 | 核心收获 |
+|------|---------|
+| 包管理器概述 | apt/dpkg 的层级关系和命令选择指南 |
+| apt | 日常安装、卸载、升级、搜索、清理 |
+| apt-get / apt-cache | 脚本友好命令和详细查询 |
+| dpkg | 直接操作 .deb 文件和底层包管理 |
+| 软件源配置 | sources.list 格式、国内镜像、第三方源 |
+| 运维场景 | 新服务器初始化、版本锁定、安全更新 |
+
+### 推荐的学习路径
+
+```
+✅ 你在这里
+│
+├──▶ [Docker 入门到进阶](../01-docker/README.md)
+│    使用 apt 安装 Docker，实践软件源配置
+│
+├──▶ [Nginx 入门到进阶](../02-nginx/README.md)
+│    使用 apt 安装 Nginx，添加官方源获取最新版本
+│
+└──▶ [Linux 常用运维命令](../04-linux-commands/README.md)
+     深入学习 systemd 服务管理——apt 安装的软件都由 systemd 管理
 ```
 
 ---

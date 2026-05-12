@@ -135,13 +135,19 @@ devops-ai-gen-course/
 
 ## 📚 课程内容
 
-| 序号 | 课程 | 主要内容 |
-|:----:|------|---------|
-| 01 | **Docker 入门到进阶** | Docker Engine、Dockerfile（多阶段构建）、Docker Compose 多服务编排 |
-| 02 | **Nginx 入门到进阶** | 静态服务、反向代理、负载均衡、SSL/HTTPS、Docker 部署 |
-| 03 | **TOML/YAML/INI 语法** | 三种配置文件格式的完整语法、对比与实战 |
-| 04 | **Linux 常用运维命令** | curl、chmod、ssh、tar/zip、systemd 服务管理 |
-| 05 | **Debian 包管理器** | apt、dpkg 使用、软件源配置、镜像加速 |
+> 每个课程模块都按照 **Diátaxis 文档框架** 组织，包含四个层次：
+> - **Tutorial（教程）** — 循序渐进的学习路径
+> - **How-to Guide（操作指南）** — 常见问题的解决方案
+> - **Reference（参考手册）** — 命令和配置速查表
+> - **Troubleshooting（故障排除）** — 常见错误及解决方法
+
+| 序号 | 课程 | 主要内容 | 文档层次 |
+|:----:|------|---------|---------|
+| 01 | **Docker 入门到进阶** | Docker Engine、Dockerfile（多阶段构建）、Docker Compose 多服务编排 | Tutorial + How-to + Reference |
+| 02 | **Nginx 入门到进阶** | 静态服务、反向代理、负载均衡、SSL/HTTPS、Docker 部署 | Tutorial + How-to + Reference |
+| 03 | **TOML/YAML/INI 语法** | 三种配置文件格式的完整语法、对比与实战 | Tutorial + How-to + Reference |
+| 04 | **Linux 常用运维命令** | curl、chmod、ssh、tar/zip、systemd 服务管理 | Tutorial + How-to + Reference |
+| 05 | **Debian 包管理器** | apt、dpkg 使用、软件源配置、镜像加速 | Tutorial + How-to + Reference |
 
 ## ❓ 常见问题
 

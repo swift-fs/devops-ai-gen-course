@@ -5,6 +5,30 @@
 
 ---
 
+## 学习目标
+
+完成本教程后，你将能够：
+
+- ✅ 理解 Nginx 的事件驱动架构及其与 Apache 的核心区别
+- ✅ 独立安装 Nginx 并理解配置文件的层级结构（http → server → location）
+- ✅ 配置静态文件服务、反向代理、负载均衡和 SSL/HTTPS
+- ✅ 使用 Docker 容器化部署 Nginx，实现多站点管理
+- ✅ 掌握 Gzip 压缩、缓存策略、限流等性能优化手段
+- ✅ 排查 Nginx 常见问题（502/504 错误、配置语法错误、性能瓶颈）
+
+## 前置条件
+
+| 条件 | 说明 | 必要性 |
+|------|------|--------|
+| Linux 基础 | 熟悉命令行操作和文本编辑 | 必需 |
+| 网络基础 | 了解 HTTP 协议、DNS、端口概念 | 必需 |
+| Docker 基础 | 了解容器基本操作 | 推荐 |
+| 域名与 SSL | 了解域名解析和 HTTPS 基本概念 | 有帮助 |
+
+> 💡 **没有 Docker 基础？** 建议先完成本课程的 [Docker 入门到进阶](../01-docker/README.md) 章节。
+
+---
+
 ## 目录
 
 - [第一部分：Nginx 基础](#第一部分nginx-基础)
@@ -26,6 +50,10 @@
   - [3.5 日志管理](#35-日志管理)
   - [3.6 限流与限速](#36-限流与限速)
 - [第四部分：Docker 部署 Nginx](#第四部分docker-部署-nginx)
+- [第五部分：常见操作指南（How-to）](#第五部分常见操作指南how-to)
+- [第六部分：配置速查表（Reference）](#第六部分配置速查表reference)
+- [第七部分：故障排除](#第七部分故障排除)
+- [总结与下一步](#总结与下一步)
 - [参考链接](#参考链接)
 
 ---
@@ -1085,6 +1113,351 @@ docker exec nginx-proxy nginx -s reload
 # 查看日志
 docker compose logs -f nginx
 ```
+
+---
+
+## 第五部分：常见操作指南（How-to）
+
+> 本部分提供 Nginx 日常运维中最常见的操作场景，按步骤指引。
+
+### 5.1 如何快速排查 502 Bad Gateway 错误
+
+```bash
+# 第 1 步：查看 Nginx 错误日志
+sudo tail -50 /var/log/nginx/error.log
+# Docker 环境：docker logs nginx-proxy
+
+# 第 2 步：确认后端服务是否正常运行
+curl http://127.0.0.1:8080/health
+# 或检查进程
+ps aux | grep your-backend
+
+# 第 3 步：检查后端服务端口是否正确
+sudo ss -tlnp | grep 8080
+
+# 第 4 步：检查 Nginx 配置中的 proxy_pass 地址
+grep proxy_pass /etc/nginx/conf.d/*.conf
+# 确保地址和端口与后端实际一致
+
+# 第 5 步：如果是超时导致的 504，增加超时时间
+# 在 location 块中添加：
+# proxy_connect_timeout 60s;
+# proxy_read_timeout 120s;
+# proxy_send_timeout 60s;
+```
+
+### 5.2 如何为 Nginx 添加新站点
+
+```bash
+# 第 1 步：创建站点配置文件
+sudo tee /etc/nginx/conf.d/new-site.conf <<'EOF'
+server {
+    listen 80;
+    server_name newsite.example.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:4000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+EOF
+
+# 第 2 步：测试配置语法
+sudo nginx -t
+
+# 第 3 步：重新加载配置（不中断服务）
+sudo nginx -s reload
+
+# Docker 环境
+docker exec nginx-proxy nginx -t
+docker exec nginx-proxy nginx -s reload
+```
+
+### 5.3 如何配置 HTTPS 并自动续期
+
+```bash
+# 第 1 步：安装 Certbot
+sudo apt-get install -y certbot python3-certbot-nginx
+
+# 第 2 步：获取证书并自动配置（确保 DNS 已指向本服务器）
+sudo certbot --nginx -d example.com -d www.example.com
+
+# 第 3 步：验证自动续期
+sudo certbot renew --dry-run
+
+# Certbot 会自动在 /etc/cron.d/certbot 中添加续期任务
+# 证书到期前 30 天自动续期
+```
+
+### 5.4 如何优化 Nginx 性能
+
+```nginx
+# 在 http 块中添加以下配置
+
+# 启用 Gzip 压缩（可减少 60-80% 传输大小）
+gzip on;
+gzip_comp_level 6;
+gzip_min_length 256;
+gzip_types text/plain text/css application/javascript application/json image/svg+xml;
+
+# 启用 HTTP/2（需要 HTTPS）
+# listen 443 ssl http2;
+
+# 优化连接处理
+sendfile on;
+tcp_nopush on;
+tcp_nodelay on;
+keepalive_timeout 65;
+
+# 调整 Worker 配置
+# worker_processes auto;          # 自动匹配 CPU 核心数
+# worker_connections 2048;        # 每个 Worker 的最大连接数
+
+# 静态资源缓存
+location ~* \.(jpg|jpeg|png|gif|ico|css|js|svg|woff2)$ {
+    expires 30d;
+    add_header Cache-Control "public, no-transform";
+    access_log off;
+}
+```
+
+### 5.5 如何查看和分析 Nginx 访问日志
+
+```bash
+# 实时查看日志
+sudo tail -f /var/log/nginx/access.log
+
+# 统计访问量最大的 IP（排查攻击）
+awk '{print $1}' /var/log/nginx/access.log | sort | uniq -c | sort -rn | head -20
+
+# 统计各状态码的数量
+awk '{print $9}' /var/log/nginx/access.log | sort | uniq -c | sort -rn
+
+# 查找 5xx 错误
+awk '$9 >= 500' /var/log/nginx/access.log
+
+# 统计请求量最大的 URL
+awk '{print $7}' /var/log/nginx/access.log | sort | uniq -c | sort -rn | head -20
+
+# 按时间段过滤日志
+awk '$4 >= "[15/Jan/2024:10:00" && $4 <= "[15/Jan/2024:12:00"' /var/log/nginx/access.log
+```
+
+---
+
+## 第六部分：配置速查表（Reference）
+
+> Nginx 最常用的配置指令和变量，按功能分类整理。
+
+### 6.1 核心配置指令
+
+| 指令 | 作用域 | 说明 | 示例 |
+|------|--------|------|------|
+| `worker_processes` | main | Worker 进程数 | `auto` |
+| `worker_connections` | events | 每个 Worker 最大连接数 | `1024` |
+| `sendfile` | http/server/location | 零拷贝传输 | `on` |
+| `tcp_nopush` | http/server | 优化数据包发送 | `on` |
+| `keepalive_timeout` | http/server/location | 长连接超时 | `65` |
+| `gzip` | http/server/location | Gzip 压缩 | `on` |
+| `server_tokens` | http/server | 隐藏版本号 | `off` |
+
+### 6.2 反向代理指令
+
+| 指令 | 说明 | 常用值 |
+|------|------|--------|
+| `proxy_pass` | 后端服务地址 | `http://127.0.0.1:8080` |
+| `proxy_set_header` | 设置转发头 | `Host $host` |
+| `proxy_connect_timeout` | 连接后端超时 | `60s` |
+| `proxy_read_timeout` | 读取响应超时 | `60s` |
+| `proxy_send_timeout` | 发送请求超时 | `60s` |
+| `proxy_buffering` | 是否缓冲响应 | `on` |
+| `proxy_cache` | 使用的缓存区 | `api_cache` |
+
+### 6.3 location 匹配规则
+
+| 修饰符 | 匹配方式 | 优先级 | 示例 |
+|--------|---------|--------|------|
+| `=` | 精确匹配 | 最高 | `location = /exact/path {}` |
+| `^~` | 前缀匹配（匹配后不检查正则） | 次高 | `location ^~ /images/ {}` |
+| `~` | 区分大小写的正则匹配 | 第三 | `location ~ \.php$ {}` |
+| `~*` | 不区分大小写的正则匹配 | 第三 | `location ~* \.(jpg\|png)$ {}` |
+| 无 | 普通前缀匹配 | 最低 | `location /api/ {}` |
+
+### 6.4 常用内置变量
+
+| 变量 | 说明 |
+|------|------|
+| `$host` | 请求中的 Host 头（域名） |
+| `$remote_addr` | 客户端 IP 地址 |
+| `$request_uri` | 完整的请求 URI（含查询参数） |
+| `$uri` | 不含查询参数的 URI |
+| `$args` | 查询参数 |
+| `$scheme` | 协议（http/https） |
+| `$request_method` | 请求方法（GET/POST 等） |
+| `$status` | 响应状态码 |
+| `$http_user_agent` | 客户端 User-Agent |
+| `$upstream_addr` | 后端服务器地址 |
+| `$upstream_response_time` | 后端响应耗时 |
+| `$request_time` | 请求总耗时 |
+
+### 6.5 常用命令速查
+
+| 命令 | 说明 |
+|------|------|
+| `nginx` | 启动 Nginx |
+| `nginx -s stop` | 快速停止 |
+| `nginx -s quit` | 优雅停止 |
+| `nginx -s reload` | 重新加载配置 |
+| `nginx -t` | 测试配置语法 |
+| `nginx -v` | 查看版本 |
+| `nginx -V` | 查看版本和编译参数 |
+
+---
+
+## 第七部分：故障排除
+
+### 问题 1：502 Bad Gateway
+
+**常见原因：**
+- 后端服务未启动或崩溃
+- proxy_pass 地址配置错误
+- 后端服务响应超时
+
+**排查步骤：**
+```bash
+# 检查后端服务状态
+curl http://127.0.0.1:8080/
+# 如果连接被拒绝，说明后端未运行
+
+# 查看 Nginx 错误日志
+tail -20 /var/log/nginx/error.log
+
+# 确认端口配置
+grep proxy_pass /etc/nginx/conf.d/*.conf
+```
+
+### 问题 2：403 Forbidden
+
+**常见原因：**
+- 文件/目录权限不足
+- index 指令未包含默认首页文件名
+- 目录下没有 index.html
+
+**排查步骤：**
+```bash
+# 检查文件权限
+ls -la /var/www/html/
+
+# 修复权限
+sudo chmod -R 755 /var/www/html/
+sudo chown -R www-data:www-data /var/www/html/
+
+# 检查 Nginx 配置中的 root 和 index
+grep -E "root|index" /etc/nginx/conf.d/*.conf
+```
+
+### 问题 3：配置修改后不生效
+
+```bash
+# 第 1 步：测试配置语法
+sudo nginx -t
+
+# 第 2 步：重新加载（而非重启，不中断服务）
+sudo nginx -s reload
+
+# 第 3 步：如果 reload 不生效，完全重启
+sudo systemctl restart nginx
+
+# 第 4 步：清除浏览器缓存后测试
+curl -I http://example.com
+```
+
+### 问题 4：Nginx 启动失败
+
+```bash
+# 查看详细错误信息
+sudo systemctl status nginx
+sudo journalctl -u nginx --since "5 minutes ago"
+
+# 常见原因：
+# 1. 端口被占用
+sudo lsof -i :80
+# 解决：停止占用端口的程序或修改 listen 端口
+
+# 2. 配置文件语法错误
+sudo nginx -t
+# 根据提示修复错误行
+
+# 3. SSL 证书文件不存在或权限错误
+ls -la /etc/nginx/certs/
+```
+
+### 问题 5：高并发下性能下降
+
+```nginx
+# 检查并调整以下配置
+
+# 增加 Worker 连接数
+events {
+    worker_connections 4096;
+}
+
+# 启用多 accept
+events {
+    multi_accept on;
+}
+
+# 启用连接复用
+upstream backend {
+    keepalive 32;    # 保持 32 个空闲长连接到后端
+    server 127.0.0.1:8080;
+}
+
+# 在 location 中使用
+location / {
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_pass http://backend;
+}
+```
+
+---
+
+## 总结与下一步
+
+### 你已经学到了什么
+
+| 部分 | 核心收获 |
+|------|---------|
+| Nginx 基础 | 事件驱动架构、安装、配置文件层级、基础命令 |
+| 核心功能 | 静态服务、反向代理、负载均衡、SSL/HTTPS、虚拟主机 |
+| 进阶功能 | URL 重写、Gzip 压缩、缓存策略、访问控制、限流 |
+| Docker 部署 | 容器化 Nginx、多站点管理、Docker Compose 编排 |
+| How-to 指南 | 502 排查、添加站点、HTTPS 配置、性能优化、日志分析 |
+
+### 推荐的学习路径
+
+```
+✅ 你在这里
+│
+├──▶ [Docker 入门到进阶](../01-docker/README.md)
+│    深入学习 Docker Compose 多服务编排
+│
+├──▶ [配置文件语法](../03-config-format/README.md)
+│    掌握 Nginx 配置文件和 Docker Compose 使用的 YAML 语法
+│
+└──▶ [Linux 常用运维命令](../04-linux-commands/README.md)
+     学习 curl、systemd 等与 Nginx 运维密切相关的命令
+```
+
+### 进阶学习建议
+
+1. **性能调优**：学习 Nginx 的 Benchmark 工具（wrk、ab），针对实际业务优化配置
+2. **安全加固**：配置 WAF（ModSecurity）、DDoS 防护、CSP 安全头
+3. **Nginx Plus**：了解商业版的高级功能（主动健康检查、API 网关、JWT 验证）
+4. **Ingress Controller**：学习在 Kubernetes 中使用 Nginx Ingress Controller
 
 ---
 
