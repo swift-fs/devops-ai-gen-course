@@ -1,6 +1,6 @@
 # Docker 从入门到进阶完整教程
 
-> 适用版本：Docker Engine 27.x / Docker Compose V2 / Dockerfile 最新语法  
+> 适用版本：Docker Engine 27.x / Docker Compose V2+（含 V5） / Dockerfile 最新语法  
 > 最后更新：2026-05
 
 ---
@@ -48,6 +48,16 @@
 - [第三部分：Docker Compose](#第三部分docker-compose)
   - [3.1 Compose 基础](#31-compose-基础)
   - [3.2 compose.yaml 详解](#32-composeyaml-详解)
+    - [基本结构](#基本结构)
+    - [最简入门示例](#最简入门示例)
+    - [完整示例：Web 应用 + 数据库 + 缓存](#完整示例web-应用--数据库--缓存)
+    - [常用服务配置项说明](#常用服务配置项说明)
+    - [网络配置详解](#网络配置详解)
+    - [数据卷配置详解](#数据卷配置详解)
+    - [环境变量详解](#环境变量详解)
+    - [entrypoint 和 command 的区别](#entrypoint-和-command-的区别)
+    - [profiles：按场景启动服务](#profiles按场景启动服务)
+    - [多环境配置（Override 与多文件合并）](#多环境配置override-与多文件合并)
   - [3.3 常用命令](#33-常用命令)
   - [3.4 实战案例](#34-实战案例)
 - [第四部分：常见操作指南（How-to）](#第四部分常见操作指南how-to)
@@ -163,7 +173,7 @@ docker --version
 # 输出示例：Docker version 27.x.x, build xxxxxxx
 
 docker compose version
-# 输出示例：Docker Compose version v2.x.x
+# 输出示例：Docker Compose version v2.32.x 或 v5.x.x
 
 # 6. 运行测试容器
 sudo docker run hello-world
@@ -1150,40 +1160,129 @@ ENTRYPOINT ["/app-server"]
 
 ### 3.1 Compose 基础
 
-Docker Compose 是一个用于定义和运行**多容器**应用的工具。你只需一个 `compose.yaml` 文件，就能描述整个应用的服务架构，然后一条命令启动所有服务。
+Docker Compose 是一个用于定义和运行**多容器**应用的工具。
 
-**Docker Compose V2** 现在已集成到 Docker CLI 中，使用 `docker compose`（没有横线）命令。
+**为什么需要 Compose？** 想象你要部署一个 Web 应用，它需要：
+- 一个 Nginx 做反向代理
+- 一个 Node.js/Python 后端服务
+- 一个 PostgreSQL 数据库
+- 一个 Redis 缓存
+
+如果用 `docker run` 手动启动，你需要记住很长的命令、正确的启动顺序、网络配置等。而 Docker Compose 让你把所有这些写在一个 `compose.yaml` 文件里，一条命令就能全部启动。
 
 ```bash
-# V2 命令格式（推荐）
+# 没有 Compose 时，你需要这样手动启动每个容器：
+docker run -d --name nginx -p 80:80 -v ./nginx.conf:/etc/nginx/nginx.conf:ro nginx
+docker run -d --name postgres -e POSTGRES_PASSWORD=xxx -v db-data:/var/lib/postgresql/data postgres
+docker run -d --name redis redis
+docker run -d --name webapp -p 8080:8080 --link nginx --link postgres --link redis my-webapp
+
+# 有了 Compose，只需要：
+docker compose up -d    # 一条命令搞定！
+```
+
+**Docker Compose V2/V5** 现在已集成到 Docker CLI 中，使用 `docker compose`（没有横线）命令。
+
+```bash
+# 推荐命令格式（V2/V5，安装 Docker 时自带）
 docker compose up -d
 
-# V1 命令格式（已弃用）
+# 旧版命令格式（V1，已弃用，需要单独用 pip 安装）
 docker-compose up -d
 ```
+
+> 💡 **怎么确认你的版本？** 运行 `docker compose version`，如果能输出版本号（如 `Docker Compose version v2.32.x` 或 `v5.x.x`），说明已经安装好了。
+
+**核心概念速览：**
+
+| 概念       | 说明                 | 类比                             |
+| ---------- | -------------------- | -------------------------------- |
+| `services` | 定义各个容器（应用） | 相当于多个 `docker run`          |
+| `volumes`  | 数据持久化存储       | 相当于 `-v` 参数                 |
+| `networks` | 容器间的网络通信     | 相当于 `--network` 参数          |
+| `.env`     | 环境变量文件         | 敏感信息（密码等）不写进配置文件 |
 
 ### 3.2 compose.yaml 详解
 
 #### 基本结构
 
+一个 `compose.yaml` 文件由三个顶级部分组成：
+
 ```yaml
 # Docker Compose 配置文件
-# 文件名：compose.yaml 或 docker-compose.yml
+# 推荐文件名（按优先级排列）：
+#   compose.yaml     ← 官方推荐的首选文件名
+#   compose.yml      ← 也可以
+#   docker-compose.yaml  ← 向后兼容（旧版本遗留习惯）
+#   docker-compose.yml   ← 向后兼容（旧版本遗留习惯）
+#
+# 如果同时存在 compose.yaml 和 docker-compose.yml，
+# Compose 会优先使用 compose.yaml
 
-# 指定 Compose 文件格式版本
-# 最新规范不需要 version 字段，但为了兼容性可以指定
-services:           # 定义各个服务（容器）
-  webapp:           # 服务名
-    # ... 配置 ...
-  database:         # 服务名
-    # ... 配置 ...
+# services：定义各个服务（容器）—— 这是唯一必填的部分
+services:
+  webapp:           # 服务名（可以自定义，其他服务用这个名字访问它）
+    image: nginx    # 使用哪个镜像
+    ports:
+      - "80:80"     # 端口映射：宿主机端口:容器端口
 
-volumes:            # 定义数据卷
-  db-data:          # 数据卷名
+  database:         # 另一个服务
+    image: postgres
+    environment:
+      POSTGRES_PASSWORD: mypass
 
-networks:           # 定义网络
-  app-network:      # 网络名
+# volumes：定义数据卷（可选）
+# 用于数据持久化，容器删除后数据不会丢失
+volumes:
+  db-data:          # 定义一个命名卷
+
+# networks：定义网络（可选）
+# 不写的话 Compose 会自动创建一个默认网络
+networks:
+  app-network:      # 定义一个自定义网络
 ```
+
+> 💡 **小白提示**：
+> - 最简单的 Compose 文件只需要 `services` 部分，`volumes` 和 `networks` 都是可选的
+> - **文件名怎么选？** 新项目推荐使用 `compose.yaml`（官方首选）；但在网上看到的教程和开源项目中，`docker-compose.yml` 更常见（历史遗留习惯），两者都能正常工作
+> - **不需要 `version` 字段了**：旧教程中常见的 `version: "3.8"` 已经过时。Docker Compose V2/V5 使用统一的 Compose Specification，自动忽略 `version` 字段
+
+#### 最简入门示例
+
+> 在看完整示例之前，先用这个最简单的配置体验一下 Compose 的工作流程。
+
+```yaml
+# compose.yaml —— 最简单的 Compose 文件
+# 只有一个 Nginx 服务，用于展示静态网页
+services:
+  web:
+    image: nginx:alpine              # 使用 Nginx 轻量镜像
+    ports:
+      - "8080:80"                    # 宿主机 8080 端口 → 容器 80 端口
+    volumes:
+      - ./html:/usr/share/nginx/html # 把本地 html 目录挂载到容器中
+```
+
+```bash
+# 1. 创建 html 目录和测试页面
+mkdir html
+echo "<h1>Hello from Docker Compose!</h1>" > html/index.html
+
+# 2. 启动服务
+docker compose up -d
+
+# 3. 访问测试
+curl http://localhost:8080
+# 输出：<h1>Hello from Docker Compose!</h1>
+
+# 4. 查看运行状态
+docker compose ps
+
+# 5. 停止并删除
+docker compose down
+```
+
+> 💡 **恭喜！** 如果上面的命令都成功执行了，说明你已经掌握了 Compose 的基本用法。下面的完整示例只是在服务数量和配置项上更加丰富。
 
 #### 完整示例：Web 应用 + 数据库 + 缓存
 
@@ -1393,6 +1492,536 @@ services:
     tmpfs:
       - /tmp                               # 需要写入的目录用 tmpfs
 ```
+
+#### 网络配置详解
+
+Docker Compose 的网络配置是多容器通信的核心。理解网络的几种模式，能帮你解决大部分服务互联问题。
+
+**为什么需要关心网络？**
+
+默认情况下，Compose 会为你的项目创建一个网络，所有服务都加入这个网络，服务之间可以用**服务名**互相访问。但在实际使用中，你经常需要更灵活的网络配置。
+
+```yaml
+# 默认行为：Compose 自动创建一个网络，名为 "项目名_default"
+# 服务之间可以直接用服务名访问，比如 webapp 可以访问 database:5432
+services:
+  webapp:
+    image: nginx
+    # 不指定 networks 时，自动加入默认网络
+  database:
+    image: postgres
+    # 同上
+```
+
+**1. 自定义网络（最常用）**
+
+```yaml
+# 手动定义网络，可以控制网络名称和驱动类型
+services:
+  frontend:
+    image: nginx
+    networks:
+      - frontend-net       # 只能和同网络的服务通信
+
+  backend:
+    image: node
+    networks:
+      - frontend-net       # 可以被 frontend 访问
+      - backend-net        # 也可以和数据库通信
+
+  database:
+    image: postgres
+    networks:
+      - backend-net        # 只有 backend 能访问数据库
+
+networks:
+  frontend-net:            # 前端网络
+    driver: bridge
+  backend-net:             # 后端网络（隔离数据库，不让前端直接访问）
+    driver: bridge
+```
+
+> 💡 **小白提示**：上面的配置实现了**网络隔离**——frontend 无法直接访问 database，必须通过 backend 中转。这是生产环境中常见的安全实践。
+
+**2. 外部网络（external）—— 跨项目通信**
+
+当你的多个 Compose 项目需要互相通信时，就需要用到外部网络。
+
+```yaml
+# 项目 A：API 服务（compose.yaml）
+services:
+  api:
+    image: my-api
+    networks:
+      - shared-network
+
+networks:
+  shared-network:
+    # external: true 表示这个网络不是由本项目创建的
+    # 而是使用 Docker 中已经存在的网络
+    # 如果网络不存在，启动时会报错
+    external: true
+    name: my-shared-net    # 指定 Docker 中的实际网络名称
+    # 如果不写 name，则使用键名 "shared-network" 作为 Docker 网络名
+```
+
+```yaml
+# 项目 B：前端服务（compose.yaml）
+services:
+  web:
+    image: my-web
+    networks:
+      - shared-network
+    # 在 web 容器内，可以用 "api" 这个服务名访问项目 A 的服务
+    # 因为它们在同一个网络中
+
+networks:
+  shared-network:
+    external: true
+    name: my-shared-net    # 名称要和项目 A 中指定的一致
+```
+
+```bash
+# 使用前，先手动创建外部网络
+docker network create my-shared-net
+
+# 然后分别启动两个项目
+cd project-a && docker compose up -d
+cd project-b && docker compose up -d
+
+# 现在两个项目的容器可以互相通信了
+```
+
+> ⚠️ **注意**：`external: true` 意味着这个网络必须**事先存在**。如果网络不存在，`docker compose up` 会报错。当你执行 `docker compose down` 时，外部网络**不会被删除**（因为它不属于这个项目）。
+
+**3. 网络别名（aliases）**
+
+在同一个网络中，可以给服务起别名，其他服务可以用别名来访问它。
+
+```yaml
+services:
+  database:
+    image: postgres:16
+    networks:
+      app-network:
+        aliases:
+          - db              # 其他服务可以用 "db" 访问
+          - postgres        # 也可以用 "postgres" 访问
+          - database        # 服务名本身也能用
+
+  webapp:
+    image: node
+    networks:
+      - app-network
+    environment:
+      # 以下三种写法都能连接到 database 服务
+      - DB_HOST=database    # 使用服务名
+      # - DB_HOST=db        # 使用别名
+      # - DB_HOST=postgres  # 使用别名
+
+networks:
+  app-network:
+```
+
+> 💡 **什么时候用别名？** 当你的应用配置中硬编码了数据库地址（比如写死了 `db` 或 `postgres`），不想改代码时，可以用别名来适配。
+
+#### 数据卷配置详解
+
+数据卷（Volumes）是容器数据持久化的关键。新手最容易犯的错误就是没有挂载数据卷，导致容器重建后数据丢失。
+
+**三种挂载方式对比：**
+
+| 方式     | 语法                          | 特点                                           | 适用场景                   |
+| -------- | ----------------------------- | ---------------------------------------------- | -------------------------- |
+| 命名卷   | `volume-name:/container/path` | 由 Docker 管理，数据持久保存在 Docker 内部目录 | 数据库数据、应用持久化数据 |
+| 绑定挂载 | `./host/path:/container/path` | 直接映射宿主机目录，双向同步                   | 开发时源码热重载、配置文件 |
+| 匿名卷   | `/container/path`             | 无名称，容器删除后可能丢失                     | 临时数据                   |
+
+**1. 命名卷（Named Volumes）**
+
+```yaml
+services:
+  database:
+    image: postgres:16
+    volumes:
+      - db-data:/var/lib/postgresql/data    # 命名卷：数据持久化
+
+volumes:
+  db-data:
+    # 默认使用 local 驱动，数据存在 Docker 管理的目录中
+    # 在 Linux 上通常是 /var/lib/docker/volumes/项目名_db-data/_data
+    driver: local
+```
+
+```bash
+# 查看所有数据卷
+docker volume ls
+
+# 查看某个数据卷的详细信息（可以看到实际存储路径）
+docker volume inspect 01-docker_db-data
+
+# 删除未使用的数据卷（⚠️ 确认不再需要后再操作）
+docker volume prune
+```
+
+**2. 外部数据卷（external）**
+
+和外部网络类似，有些数据卷需要在多个 Compose 项目之间共享，或者由外部系统管理。
+
+```yaml
+services:
+  database:
+    image: postgres:16
+    volumes:
+      - shared-data:/var/lib/postgresql/data
+
+volumes:
+  shared-data:
+    # external: true 表示这个卷已经存在，不是由本项目创建的
+    # 适合在多个项目间共享数据，或者数据由备份恢复脚本预先创建
+    external: true
+    name: my-shared-db-volume    # 指定外部卷的名称
+```
+
+```bash
+# 使用前，先手动创建外部卷
+docker volume create my-shared-db-volume
+
+# 启动项目
+docker compose up -d
+
+# external 卷在 docker compose down 时不会被删除
+```
+
+**3. 绑定挂载的注意事项**
+
+```yaml
+services:
+  webapp:
+    image: nginx
+    volumes:
+      # 绑定挂载：宿主机目录直接映射到容器内
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro    # :ro 表示只读，容器不能修改
+      - ./html:/usr/share/nginx/html              # 可读写
+      - ./logs:/var/log/nginx                     # 日志输出到宿主机
+```
+
+> ⚠️ **绑定挂载的常见坑：**
+> 1. **宿主机路径必须存在**：如果是挂载文件，文件必须事先存在；否则 Docker 会把它当作目录创建
+> 2. **权限问题**：容器内的用户权限和宿主机可能不一致，可能导致读写报错
+> 3. **不要挂载整个系统目录**：比如 `/:/host` 这样的挂载很危险
+
+**4. 绑定挂载 vs 命名卷：怎么选？**
+
+```
+开发环境：
+  ✅ 绑定挂载（方便修改代码，实时生效）
+  ✅ 配置文件用绑定挂载 + :ro（只读，防止容器修改配置）
+
+生产环境：
+  ✅ 命名卷（数据由 Docker 统一管理，方便备份和迁移）
+  ✅ 配置文件可以用绑定挂载，但注意权限
+```
+
+#### 环境变量详解
+
+环境变量是配置容器化应用最常用的方式。Compose 提供了多种设置环境变量的方法。
+
+**1. `environment` 直接设置**
+
+```yaml
+services:
+  webapp:
+    environment:
+      # 方式一：映射格式（推荐，更清晰）
+      DATABASE_URL: postgresql://user:pass@db:5432/mydb
+      REDIS_URL: redis://cache:6379/0
+      DEBUG: "false"
+
+      # 方式二：列表格式
+      # - DATABASE_URL=postgresql://user:pass@db:5432/mydb
+      # - REDIS_URL=redis://cache:6379/0
+```
+
+**2. `env_file` 从文件加载**
+
+当你有很多环境变量，或者不同环境（开发/生产）使用不同变量时，用 `.env` 文件更方便。
+
+```yaml
+services:
+  webapp:
+    # 从文件加载环境变量，文件中每行一个 KEY=VALUE
+    env_file:
+      - .env                    # 基础配置
+      - .env.local              # 本地覆盖配置（不提交到 Git）
+```
+
+```bash
+# .env 文件示例
+DATABASE_URL=postgresql://user:pass@db:5432/mydb
+REDIS_URL=redis://cache:6379/0
+SECRET_KEY=my-secret-key
+DEBUG=false
+```
+
+**3. 变量插值和默认值**
+
+```yaml
+services:
+  database:
+    image: postgres:16
+    environment:
+      # ${变量名} 从 .env 文件或宿主机环境变量读取
+      POSTGRES_USER: ${DB_USER}
+
+      # :- 设置默认值：如果 DB_PASSWORD 未设置，则使用 "defaultpass"
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-defaultpass}
+
+      # :? 报错退出：如果 DB_NAME 未设置，启动时报错并显示提示信息
+      POSTGRES_DB: ${DB_NAME:?请在 .env 文件中设置 DB_NAME}
+```
+
+**4. `.env` 文件 vs `env_file` 的区别（容易混淆！）**
+
+| 特性     | `.env`（项目根目录）                          | `env_file`（服务配置）                      |
+| -------- | --------------------------------------------- | ------------------------------------------- |
+| 作用     | 在 `compose.yaml` 中用于**变量插值** `${VAR}` | 将变量注入到**容器内部**                    |
+| 位置     | 放在项目根目录，自动加载                      | 在 `services.xxx.env_file` 中指定路径       |
+| 作用范围 | 整个 Compose 文件                             | 只对指定的服务生效                          |
+| 使用场景 | 设置 Compose 层面的变量（镜像版本、端口映射） | 给应用传递运行时配置（数据库密码、API Key） |
+
+```yaml
+# .env 文件（项目根目录，用于 compose.yaml 中的变量插值）
+POSTGRES_VERSION=16
+HOST_PORT=5432
+DB_PASSWORD=mysecretpassword
+
+---
+# compose.yaml
+services:
+  database:
+    image: postgres:${POSTGRES_VERSION}    # 使用 .env 中的变量
+    ports:
+      - "${HOST_PORT}:5432"                # 使用 .env 中的变量
+    env_file:
+      - db.env                             # db.env 中的变量会注入容器内部
+```
+
+```bash
+# db.env（专门给数据库容器用的环境变量）
+POSTGRES_USER=appuser
+POSTGRES_PASSWORD=mysecretpassword
+POSTGRES_DB=appdb
+```
+
+#### entrypoint 和 command 的区别
+
+这两个配置项都和"容器启动时执行什么命令"有关，但行为不同，新手经常搞混。
+
+| 配置项       | 作用                                     | 类比                       |
+| ------------ | ---------------------------------------- | -------------------------- |
+| `entrypoint` | 容器启动时**固定执行**的程序             | 比如总解释器 `/bin/python` |
+| `command`    | 传给 entrypoint 的**参数**（或覆盖 CMD） | 比如脚本名 `app.py`        |
+
+```yaml
+services:
+  # 示例 1：用 command 覆盖默认命令
+  webapp:
+    image: node:20
+    # 镜像默认执行的是 node，这里覆盖为 npm start
+    command: npm start
+
+  # 示例 2：entrypoint + command 配合使用
+  app:
+    image: python:3.12
+    entrypoint: ["python"]           # 固定用 python 解释器
+    command: ["app.py"]              # 执行 python app.py
+
+  # 示例 3：覆盖镜像自带的 entrypoint
+  debug:
+    image: my-app
+    # 完全替换镜像中的 entrypoint 和 command，进入调试模式
+    entrypoint: ["sh", "-c"]
+    command: ["sleep 3600"]
+```
+
+> 💡 **简单记忆**：`entrypoint` 是"执行器"，`command` 是"参数"。大多数情况下你只需要设置 `command` 就够了。
+
+#### profiles：按场景启动服务
+
+当你有一组服务只在特定场景下使用（比如测试工具、数据库管理界面），可以用 `profiles` 来控制它们默认不启动。
+
+```yaml
+services:
+  # 默认启动的服务（没有 profiles）
+  webapp:
+    image: nginx
+    ports:
+      - "80:80"
+
+  database:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: devpass
+
+  # 带有 profiles 的服务：默认不会启动
+  adminer:
+    image: adminer
+    ports:
+      - "8888:8080"
+    profiles:
+      - debug          # 属于 debug 配置
+    depends_on:
+      - database
+
+  pgadmin:
+    image: dpage/pgadmin4
+    ports:
+      - "5050:80"
+    profiles:
+      - debug          # 也属于 debug 配置
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+
+  test-runner:
+    image: node:20
+    profiles:
+      - test           # 属于 test 配置
+    command: npm test
+```
+
+```bash
+# 默认启动：只启动 webapp 和 database
+docker compose up -d
+
+# 启用 debug 配置：额外启动 adminer 和 pgadmin
+docker compose --profile debug up -d
+
+# 启用 test 配置：额外启动 test-runner
+docker compose --profile test up -d
+
+# 同时启用多个 profile
+docker compose --profile debug --profile test up -d
+```
+
+> 💡 **典型用法**：开发时 `--profile debug` 启动管理工具，生产环境不加 profile 只启动核心服务。
+
+#### 多环境配置（Override 与多文件合并）
+
+在实际开发中，你的开发环境和生产环境通常需要不同的配置。Docker Compose 提供了几种方式来管理多环境配置。
+
+**方式一：自动合并 `compose.override.yaml`**
+
+Docker Compose 在启动时会自动查找并合并两个文件：
+
+```
+compose.yaml             # 基础配置（必须存在）
+compose.override.yaml    # 覆盖配置（可选，自动合并）
+```
+
+```yaml
+# compose.yaml —— 基础配置（开发和生产共用）
+services:
+  webapp:
+    image: my-webapp
+    ports:
+      - "80:80"
+    environment:
+      - APP_ENV=production
+```
+
+```yaml
+# compose.override.yaml —— 开发环境覆盖（自动合并，不要提交到 Git）
+services:
+  webapp:
+    # 覆盖 command，使用开发服务器
+    command: npm run dev
+    # 追加端口映射（开发时暴露调试端口）
+    ports:
+      - "80:80"
+      - "9229:9229"    # Node.js 调试端口
+    # 追加卷挂载（源码热重载）
+    volumes:
+      - ./src:/app/src
+    # 覆盖环境变量
+    environment:
+      - APP_ENV=development
+      - DEBUG=true
+```
+
+```bash
+# 在开发机上：自动合并 compose.yaml + compose.override.yaml
+docker compose up -d
+
+# 如果不想合并 override 文件，可以显式指定文件
+docker compose -f compose.yaml up -d
+```
+
+**方式二：使用多个 `-f` 文件**
+
+```bash
+# 开发环境：基础 + 开发覆盖
+docker compose -f compose.yaml -f compose.dev.yaml up -d
+
+# 生产环境：只用基础配置
+docker compose -f compose.yaml -f compose.prod.yaml up -d
+
+# CI/CD 测试环境：基础 + 测试覆盖
+docker compose -f compose.yaml -f compose.test.yaml up -d
+```
+
+```yaml
+# compose.prod.yaml —— 生产环境专用配置
+services:
+  webapp:
+    image: my-registry/my-webapp:v1.0    # 使用镜像仓库中的版本
+    restart: always                       # 生产环境自动重启
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+```
+
+**方式三：使用 `.env` 文件切换环境**
+
+```bash
+# .env.dev —— 开发环境变量
+COMPOSE_PROJECT_NAME=myapp-dev
+APP_IMAGE_TAG=latest
+HOST_PORT=8080
+
+# .env.prod —— 生产环境变量
+COMPOSE_PROJECT_NAME=myapp-prod
+APP_IMAGE_TAG=v1.0.0
+HOST_PORT=80
+```
+
+```yaml
+# compose.yaml —— 使用变量实现环境差异
+services:
+  webapp:
+    image: my-webapp:${APP_IMAGE_TAG}
+    ports:
+      - "${HOST_PORT}:80"
+```
+
+```bash
+# 通过指定 env 文件切换环境
+docker compose --env-file .env.dev up -d
+docker compose --env-file .env.prod up -d
+```
+
+> 💡 **三种方式对比**：
+> - **override 自动合并**：最方便，适合个人开发
+> - **多 `-f` 文件**：最灵活，适合 CI/CD 流水线
+> - **`.env` 文件**：适合只有少量配置差异的场景
 
 ### 3.3 常用命令
 
