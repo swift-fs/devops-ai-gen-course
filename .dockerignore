@@ -1,0 +1,6 @@
+.trae/
+.git/
+.gitignore
+*.md
+!stage-1/**/*.md
+docker-compose.yml

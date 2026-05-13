@@ -12,18 +12,19 @@
 - ✅ 理解 Nginx 的事件驱动架构及其与 Apache 的核心区别
 - ✅ 独立安装 Nginx 并理解配置文件的层级结构（http → server → location）
 - ✅ 配置静态文件服务、反向代理、负载均衡和 SSL/HTTPS
+- ✅ 使用 Let's Encrypt + lego 自动获取和管理免费 SSL 证书
 - ✅ 使用 Docker 容器化部署 Nginx，实现多站点管理
 - ✅ 掌握 Gzip 压缩、缓存策略、限流等性能优化手段
 - ✅ 排查 Nginx 常见问题（502/504 错误、配置语法错误、性能瓶颈）
 
 ## 前置条件
 
-| 条件 | 说明 | 必要性 |
-|------|------|--------|
-| Linux 基础 | 熟悉命令行操作和文本编辑 | 必需 |
-| 网络基础 | 了解 HTTP 协议、DNS、端口概念 | 必需 |
-| Docker 基础 | 了解容器基本操作 | 推荐 |
-| 域名与 SSL | 了解域名解析和 HTTPS 基本概念 | 有帮助 |
+| 条件        | 说明                          | 必要性 |
+| ----------- | ----------------------------- | ------ |
+| Linux 基础  | 熟悉命令行操作和文本编辑      | 必需   |
+| 网络基础    | 了解 HTTP 协议、DNS、端口概念 | 必需   |
+| Docker 基础 | 了解容器基本操作              | 推荐   |
+| 域名与 SSL  | 了解域名解析和 HTTPS 基本概念 | 有帮助 |
 
 > 💡 **没有 Docker 基础？** 建议先完成本课程的 [Docker 入门到进阶](../01-docker/README.md) 章节。
 
@@ -64,13 +65,13 @@
 
 Nginx（读作 "engine-x"）是一个高性能的开源软件，主要用途：
 
-| 用途 | 说明 |
-|------|------|
+| 用途           | 说明                                |
+| -------------- | ----------------------------------- |
 | **Web 服务器** | 处理静态文件（HTML、CSS、JS、图片） |
-| **反向代理** | 将请求转发给后端应用服务器 |
-| **负载均衡** | 在多个后端服务器之间分发流量 |
-| **邮件代理** | IMAP/POP3/SMTP 代理（较少用） |
-| **API 网关** | 路由、认证、限流等 |
+| **反向代理**   | 将请求转发给后端应用服务器          |
+| **负载均衡**   | 在多个后端服务器之间分发流量        |
+| **邮件代理**   | IMAP/POP3/SMTP 代理（较少用）       |
+| **API 网关**   | 路由、认证、限流等                  |
 
 **Nginx vs Apache 对比：**
 
@@ -548,36 +549,612 @@ server {
 
 ### 2.4 SSL/HTTPS 配置
 
-#### 使用 Let's Encrypt 免费证书（推荐）
+#### 背景知识：为什么需要 HTTPS？
 
-```bash
-# 安装 Certbot
-sudo apt-get install -y certbot python3-certbot-nginx
+在互联网上，数据以明文形式传输是非常危险的。HTTPS 通过加密来保护数据安全。
 
-# 自动获取并配置证书（交互式）
-sudo certbot --nginx -d example.com -d www.example.com
+```
+HTTP（不安全）：
+浏览器 ──明文──▶ 网络 ──明文──▶ 服务器
+        任何中间人都能看到你传输的密码、银行卡号等
 
-# 自动续期（Certbot 会自动添加定时任务）
-sudo certbot renew --dry-run    # 测试续期
+HTTPS（安全）：
+浏览器 ──加密数据──▶ 网络 ──加密数据──▶ 服务器
+        中间人只能看到乱码，无法窃取内容
 ```
 
-#### 手动配置 SSL
+**HTTPS 的三个核心作用：**
+
+| 作用         | 说明                                     |
+| ------------ | ---------------------------------------- |
+| **加密**     | 数据传输时加密，防止被窃听               |
+| **身份验证** | 确认你连接的是真正的服务器，防止钓鱼网站 |
+| **完整性**   | 确保数据在传输过程中没有被篡改           |
+
+**要实现 HTTPS，你需要一个 SSL/TLS 证书。** 证书就像网站的"身份证"，由权威机构（CA，Certificate Authority）签发。
+
+#### 什么是 Let's Encrypt？
+
+**Let's Encrypt** 是一个**免费的、自动化的**证书颁发机构（CA），由非营利组织 ISRG 运营。
+
+| 对比项     | 传统 CA（如 DigiCert） | Let's Encrypt                |
+| ---------- | ---------------------- | ---------------------------- |
+| 价格       | 每年几十到几千元       | **完全免费**                 |
+| 有效期     | 1-2 年                 | **90 天**（但可自动续期）    |
+| 申请方式   | 手动提交材料、人工审核 | **全自动**（通过 ACME 协议） |
+| 通配符证书 | 通常需付费             | **支持**（通过 DNS 验证）    |
+
+> 💡 **90 天有效期不是缺点！** 短有效期 + 自动续期 = 更安全。即使私钥泄露，影响时间也很短。
+
+#### 什么是 ACME 协议？
+
+**ACME**（Automatic Certificate Management Environment）是 Let's Encrypt 设计的自动化证书管理协议（标准编号：RFC 8555）。
+
+简单来说，ACME 协议定义了你的服务器如何**自动**向 Let's Encrypt 证明"我确实拥有这个域名"，然后自动获取和续期证书。
+
+```
+ACME 工作流程（简化版）：
+
+  你的服务器                          Let's Encrypt
+      │                                    │
+      │  1. "我想申请 example.com 的证书"    │
+      │ ──────────────────────────────────▶ │
+      │                                    │
+      │  2. "好的，请在你的网站上放一个       │
+      │     特殊文件来证明你拥有这个域名"      │
+      │ ◀────────────────────────────────── │
+      │                                    │
+      │  3. （你放置验证文件）                │
+      │                                    │
+      │  4. "验证文件已放好，请检查"           │
+      │ ──────────────────────────────────▶ │
+      │                                    │
+      │  5. （Let's Encrypt 检查验证文件）     │
+      │                                    │
+      │  6. "验证通过！这是你的证书"           │
+      │ ◀────────────────────────────────── │
+```
+
+要使用 ACME 协议，你需要一个 **ACME 客户端**软件。常见的有：
+
+| 客户端      | 语言   | 特点                                              |
+| ----------- | ------ | ------------------------------------------------- |
+| **Certbot** | Python | 最知名，由 EFF 开发，有 Nginx/Apache 自动集成插件 |
+| **lego**    | Go     | 轻量、无依赖、支持 180+ DNS 服务商、Docker 友好   |
+| **acme.sh** | Shell  | 纯 Shell 实现，适合嵌入式设备                     |
+
+> 本教程使用 **lego**，因为它是 Go 编写的单文件二进制，无需安装运行时环境，且对 Docker 部署非常友好。
+
+#### 安装 lego
+
+##### 方式一：直接下载二进制文件（推荐 ✅）
+
+```bash
+# 第 1 步：查看你的系统架构
+# 大多数云服务器是 linux-amd64
+# 树莓派等 ARM 设备是 linux-arm64
+uname -m
+# x86_64 → amd64
+# aarch64 → arm64
+
+# 第 2 步：下载 lego（以 linux-amd64 为例）
+# 访问 https://github.com/go-acme/lego/releases 查看最新版本
+curl -L -o lego.tar.gz https://github.com/go-acme/lego/releases/download/v4.22.1/lego_v4.22.1_linux_amd64.tar.gz
+
+# 第 3 步：解压
+tar xzf lego.tar.gz
+
+# 第 4 步：移动到系统路径（使其在任何目录下都能使用）
+sudo mv lego /usr/local/bin/lego
+
+# 第 5 步：验证安装
+lego --version
+# 输出类似：lego version 4.22.1
+```
+
+##### 方式二：使用 Docker
+
+```bash
+# 直接使用 Docker 运行（无需安装）
+# 注意：需要挂载本地目录来保存证书和账户信息
+docker run --rm \
+  -v ./lego-data:/.lego \
+  goacme/lego --help
+
+# 后续所有 lego 命令都可以通过 Docker 运行
+# 只需要把 `lego` 替换为：
+docker run --rm \
+  -v ./lego-data:/.lego \
+  goacme/lego
+```
+
+##### 方式三：使用 Docker Compose
+
+```yaml
+# compose.yaml
+services:
+  lego:
+    image: goacme/lego
+    volumes:
+      - ./lego-data:/.lego          # 证书和账户数据持久化
+      - ./certs:/certs              # 导出证书到宿主机
+    environment:
+      - TZ=Asia/Shanghai
+```
+
+#### 域名验证方式（Challenge Types）
+
+Let's Encrypt 需要验证你确实拥有某个域名。lego 支持三种验证方式：
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    三种验证方式对比                           │
+├──────────┬──────────────┬──────────────┬───────────────────┤
+│          │   HTTP-01    │ TLS-ALPN-01  │     DNS-01        │
+├──────────┼──────────────┼──────────────┼───────────────────┤
+│ 验证原理 │ 在网站放文件  │ 在端口放证书  │ 在 DNS 加 TXT 记录│
+│ 需要端口 │ 80           │ 443          │ 无（不需要开端口） │
+│ 通配符   │ ❌ 不支持     │ ❌ 不支持     │ ✅ 支持 *.域名    │
+│ 自动化   │ 简单         │ 简单         │ 需 DNS 服务商 API │
+│ 内网可用 │ ❌ 不行       │ ❌ 不行       │ ✅ 可以           │
+│ 推荐场景 │ 有 Web 服务器 │ 有 TLS 服务  │ 通配符、内网服务器 │
+└──────────┴──────────────┴──────────────┴───────────────────┘
+```
+
+##### 方式一：HTTP-01 验证（最常用，适合已有 Nginx 的场景）
+
+**原理：** Let's Encrypt 会访问 `http://你的域名/.well-known/acme-challenge/随机文件`，如果返回正确内容，说明你控制着这个域名。
+
+```
+Let's Encrypt ──HTTP GET──▶ http://example.com/.well-known/acme-challenge/xxx
+                              │
+                              ▼
+                         你的 Nginx 服务器
+                         （返回 lego 放置的验证文件）
+```
+
+**前置条件：**
+- 域名已解析到你的服务器 IP（A 记录）
+- 服务器的 80 端口可从公网访问
+
+```bash
+# 第 1 步：确保域名已解析到本服务器
+# 在你的 DNS 服务商添加 A 记录：
+# example.com → A → 你的服务器IP
+
+# 验证 DNS 是否生效（替换为你的域名和 IP）
+ping example.com
+# 应该显示你的服务器 IP
+
+# 第 2 步：确保 80 端口可访问
+# 如果 Nginx 正在运行且占用了 80 端口，需要使用 webroot 模式
+# 如果 80 端口没有被占用，lego 可以自己启动临时服务器
+
+# ---- 情况 A：80 端口没有被占用（最简单）----
+# lego 会临时启动一个 HTTP 服务器来完成验证
+
+lego --email="admin@example.com" \
+     --domains="example.com" \
+     --domains="www.example.com" \
+     --http \
+     --http.port=80 \
+     --accept-tos \
+     run
+
+# ---- 情况 B：Nginx 已占用 80 端口（推荐 webroot 模式）----
+# 让 Nginx 和 lego 共存，通过 Nginx 提供验证文件
+
+# 首先在 Nginx 配置中添加 ACME 验证路径
+# 在 server 块中添加：
+# location /.well-known/acme-challenge/ {
+#     root /var/www/acme;
+# }
+
+# 然后使用 webroot 模式运行 lego
+lego --email="admin@example.com" \
+     --domains="example.com" \
+     --domains="www.example.com" \
+     --http \
+     --http.webroot=/var/www/acme \
+     --accept-tos \
+     run
+```
+
+> ⚠️ **关于 `--accept-tos` 参数：** 这表示你同意 Let's Encrypt 的服务条款（Terms of Service）。首次使用必须加上。
+
+##### 方式二：DNS-01 验证（支持通配符证书，适合高级场景）
+
+**原理：** 你在 DNS 中添加一条特定的 TXT 记录，Let's Encrypt 通过查询 DNS 来验证你拥有该域名。
+
+```
+Let's Encrypt ──DNS TXT 查询──▶ _acme-challenge.example.com
+                                 │
+                                 ▼
+                          返回你设置的 TXT 记录值
+                          （由 lego 通过 DNS API 自动设置）
+```
+
+**优势：** 不需要开放任何端口，支持通配符证书（`*.example.com`），内网服务器也能用。
+
+**前置条件：** 你的 DNS 服务商支持 API 操作。lego 支持 180+ DNS 服务商，以下列出常见的：
+
+| DNS 服务商    | lego 中的名称 | 需要的环境变量                                               |
+| ------------- | ------------- | ------------------------------------------------------------ |
+| Cloudflare    | `cloudflare`  | `CLOUDFLARE_DNS_API_TOKEN`                                   |
+| 阿里云 DNS    | `alidns`      | `ALICLOUD_ACCESS_KEY`, `ALICLOUD_SECRET_KEY`                 |
+| 腾讯云 DNSPod | `dnspod`      | `DNSPOD_API_KEY`                                             |
+| 华为云 DNS    | `huaweicloud` | `HUAWEICLOUD_ACCESS_KEY_ID`, `HUAWEICLOUD_SECRET_ACCESS_KEY` |
+| AWS Route53   | `route53`     | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`                 |
+
+**以 Cloudflare 为例（最常见的免费 DNS 服务商）：**
+
+```bash
+# 第 1 步：在 Cloudflare 获取 API Token
+# 登录 https://dash.cloudflare.com
+# 进入 My Profile → API Tokens → Create Token
+# 选择 "Edit zone DNS" 模板
+# 保存生成的 Token（只显示一次！）
+
+# 第 2 步：设置环境变量（替换为你的真实 Token）
+export CLOUDFLARE_DNS_API_TOKEN="your-api-token-here"
+
+# 第 3 步：申请证书（含通配符）
+lego --email="admin@example.com" \
+     --domains="example.com" \
+     --domains="*.example.com" \
+     --dns="cloudflare" \
+     --accept-tos \
+     run
+```
+
+**以阿里云 DNS 为例（国内常用）：**
+
+```bash
+# 第 1 步：在阿里云控制台创建 AccessKey
+# 登录 https://ram.console.aliyun.com
+# 创建 AccessKey，获取 AccessKey ID 和 AccessKey Secret
+
+# 第 2 步：设置环境变量
+export ALICLOUD_ACCESS_KEY="your-access-key-id"
+export ALICLOUD_SECRET_KEY="your-access-key-secret"
+
+# 第 3 步：申请证书
+lego --email="admin@example.com" \
+     --domains="example.com" \
+     --domains="*.example.com" \
+     --dns="alidns" \
+     --accept-tos \
+     run
+```
+
+> 💡 **通配符证书说明：** `*.example.com` 可以匹配 `www.example.com`、`api.example.com` 等所有子域名，但**不匹配** `example.com` 本身和 `a.b.example.com`（只匹配一级子域名）。所以通常需要同时申请两个域名。
+
+##### 方式三：TLS-ALPN-01 验证（较少使用）
+
+**原理：** 与 HTTP-01 类似，但通过 443 端口的 TLS 握手来验证。
+
+```bash
+# 需要 443 端口未被占用，或使用 --tls.port 指定其他端口
+lego --email="admin@example.com" \
+     --domains="example.com" \
+     --tls \
+     --accept-tos \
+     run
+```
+
+#### 证书获取后的文件说明
+
+运行 `lego ... run` 成功后，默认在当前目录的 `.lego/` 文件夹中生成以下文件：
+
+```
+.lego/
+├── accounts/
+│   └── acme-v02.api.letsencrypt.org/
+│       └── admin@example.com/
+│           ├── account.json     # 你的 ACME 账户信息
+│           └── keys/
+│               └── admin@example.com.key  # 账户私钥（用于后续续期）
+└── certificates/
+    ├── example.com.crt          # 证书文件（仅服务器证书）
+    ├── example.com.issuer.crt   # 中间证书
+    ├── example.com.json         # 证书元数据
+    └── example.com.key          # 证书私钥（⚠️ 绝对不能泄露！）
+```
+
+**Nginx 需要的两个关键文件：**
+
+| Nginx 配置项          | 对应文件                     | 说明                 |
+| --------------------- | ---------------------------- | -------------------- |
+| `ssl_certificate`     | `example.com.crt` + 中间证书 | 需要合并为完整证书链 |
+| `ssl_certificate_key` | `example.com.key`            | 证书私钥             |
+
+```bash
+# 创建完整证书链（fullchain = 服务器证书 + 中间证书）
+# 这是 Nginx 的 ssl_certificate 需要的格式
+cat .lego/certificates/example.com.crt \
+    .lego/certificates/example.com.issuer.crt \
+    > /etc/nginx/certs/example.com.fullchain.pem
+
+# 复制私钥
+cp .lego/certificates/example.com.key \
+   /etc/nginx/certs/example.com.key
+
+# 设置安全权限（⚠️ 私钥文件只能被 root 读取）
+sudo chmod 600 /etc/nginx/certs/example.com.key
+sudo chmod 644 /etc/nginx/certs/example.com.fullchain.pem
+```
+
+> 💡 **为什么需要 fullchain？** 浏览器需要完整的证书链来验证你的证书是否可信。如果只提供服务器证书，某些浏览器会报"不受信任"错误。
+
+#### 证书续期
+
+Let's Encrypt 的证书有效期只有 **90 天**，所以需要定期续期。
+
+```bash
+# 续期命令（只需把 run 改为 renew）
+# 默认在证书到期前 30 天才会真正续期
+lego --email="admin@example.com" \
+     --domains="example.com" \
+     --http \
+     renew
+
+# 自定义续期阈值（提前 45 天续期）
+lego --email="admin@example.com" \
+     --domains="example.com" \
+     --http \
+     renew --days=45
+
+# DNS 验证方式的续期
+lego --email="admin@example.com" \
+     --domains="example.com" \
+     --domains="*.example.com" \
+     --dns="cloudflare" \
+     renew
+
+# 续期成功后，重新加载 Nginx（使新证书生效）
+# 注意：续期后需要重新复制证书文件并 reload Nginx
+sudo nginx -s reload
+```
+
+**设置自动续期（定时任务）：**
+
+```bash
+# 方式一：使用 crontab（推荐）
+
+# 编辑定时任务
+sudo crontab -e
+
+# 添加以下内容（每天凌晨 3 点检查续期）
+# 续期脚本
+0 3 * * * /usr/local/bin/lego --email="admin@example.com" --domains="example.com" --http --http.webroot=/var/www/acme renew --days=30 && cat /root/.lego/certificates/example.com.crt /root/.lego/certificates/example.com.issuer.crt > /etc/nginx/certs/example.com.fullchain.pem && cp /root/.lego/certificates/example.com.key /etc/nginx/certs/example.com.key && chmod 600 /etc/nginx/certs/example.com.key && docker exec nginx-proxy nginx -s reload
+```
+
+```bash
+# 方式二：创建续期脚本（更易维护）
+
+sudo tee /usr/local/bin/renew-cert.sh <<'SCRIPT'
+#!/bin/bash
+# Let's Encrypt 证书自动续期脚本
+
+# ===== 配置区域（根据你的实际情况修改） =====
+DOMAIN="example.com"
+EMAIL="admin@example.com"
+CERT_DIR="/etc/nginx/certs"
+LEGO_DIR="/root/.lego"
+NGINX_CMD="docker exec nginx-proxy nginx -s reload"
+
+# ===== 执行续期 =====
+echo "[$(date)] 开始检查证书续期..."
+
+lego --email="${EMAIL}" \
+     --domains="${DOMAIN}" \
+     --http \
+     --http.webroot=/var/www/acme \
+     renew --days=30
+
+# 检查续期是否成功（通过退出码判断）
+if [ $? -eq 0 ]; then
+    echo "[$(date)] 证书已更新，正在部署..."
+
+    # 合并证书链
+    cat "${LEGO_DIR}/certificates/${DOMAIN}.crt" \
+        "${LEGO_DIR}/certificates/${DOMAIN}.issuer.crt" \
+        > "${CERT_DIR}/${DOMAIN}.fullchain.pem"
+
+    # 复制私钥
+    cp "${LEGO_DIR}/certificates/${DOMAIN}.key" \
+       "${CERT_DIR}/${DOMAIN}.key"
+    chmod 600 "${CERT_DIR}/${DOMAIN}.key"
+
+    # 重新加载 Nginx
+    ${NGINX_CMD}
+
+    echo "[$(date)] 证书部署完成！"
+else
+    echo "[$(date)] 证书未到续期时间或续期失败。"
+fi
+SCRIPT
+
+# 给脚本执行权限
+sudo chmod +x /usr/local/bin/renew-cert.sh
+
+# 添加到 crontab（每天凌晨 3 点执行）
+sudo crontab -e
+# 添加：
+# 0 3 * * * /usr/local/bin/renew-cert.sh >> /var/log/lego-renew.log 2>&1
+```
+
+#### 证书撤销
+
+如果私钥泄露或不再需要证书，可以撤销它：
+
+```bash
+# 撤销证书
+lego --email="admin@example.com" \
+     --domains="example.com" \
+     --http \
+     revoke
+```
+
+#### 其他常用 lego 命令
+
+```bash
+# 查看已管理的所有证书
+lego list
+
+# 只查看证书域名（简化输出）
+lego list --names
+
+# 查看已注册的账户
+lego list --accounts
+
+# 使用 Let's Encrypt 测试环境（不会消耗正式证书配额，调试用）
+# 测试环境颁发的证书不被浏览器信任，但流程与正式环境完全一致
+lego --email="admin@example.com" \
+     --domains="example.com" \
+     --http \
+     --server="https://acme-staging-v02.api.letsencrypt.org/directory" \
+     --accept-tos \
+     run
+
+# 指定证书存储路径（默认是当前目录的 .lego/）
+lego --path="/opt/lego-data" \
+     --email="admin@example.com" \
+     --domains="example.com" \
+     --http \
+     run
+
+# 指定密钥类型（默认 ECDSA P256，也可选 RSA 2048/4096）
+lego --email="admin@example.com" \
+     --domains="example.com" \
+     --http \
+     --key-type="rsa4096" \
+     run
+```
+
+#### Let's Encrypt 速率限制
+
+Let's Encrypt 对证书申请有频率限制，避免滥用：
+
+| 限制类型           | 限制值            | 说明                                   |
+| ------------------ | ----------------- | -------------------------------------- |
+| 每个域名每周证书数 | 50 张             | 每周每个注册域名最多申请 50 张不同证书 |
+| 重复证书限制       | 每周 5 张         | 相同域名的重复证书每周最多 5 张        |
+| 验证失败限制       | 每小时 5 次       | 每个账户每小时最多 5 次验证失败        |
+| 账户注册限制       | 每个 IP 3 个/小时 | 每个 IP 每小时最多注册 3 个账户        |
+
+> ⚠️ **重要提示：** 测试时务必使用 **staging 环境**（加 `--server=https://acme-staging-v02.api.letsencrypt.org/directory`），避免消耗正式配额！
+
+#### 完整实战：使用 lego + Nginx 部署 HTTPS 网站
+
+以下是一个从零开始的完整流程，将一个域名配置为 HTTPS：
+
+**第 1 步：DNS 解析**
+
+在你的 DNS 服务商（如 Cloudflare、阿里云）添加 A 记录：
+
+```
+类型    主机记录    记录值
+A       @         123.45.67.89    （你的服务器 IP）
+A       www       123.45.67.89
+```
+
+**第 2 步：安装 lego**（参考上文"安装 lego"部分）
+
+**第 3 步：配置 Nginx 支持 ACME 验证**
 
 ```nginx
+# /etc/nginx/conf.d/example.com.conf
 server {
-    # HTTP 重定向到 HTTPS
     listen 80;
     server_name example.com www.example.com;
-    return 301 https://$host$request_uri;    # 301 永久重定向
+
+    # 让 lego 能通过 Nginx 完成 HTTP-01 验证
+    location /.well-known/acme-challenge/ {
+        root /var/www/acme;
+    }
+
+    # 其他请求重定向到 HTTPS（申请证书后再启用）
+    # location / {
+    #     return 301 https://$host$request_uri;
+    # }
+}
+```
+
+```bash
+# 创建验证文件目录
+sudo mkdir -p /var/www/acme
+
+# 测试并重新加载 Nginx
+sudo nginx -t && sudo nginx -s reload
+```
+
+**第 4 步：申请证书**
+
+```bash
+# 先用测试环境验证流程是否正确
+lego --email="admin@example.com" \
+     --domains="example.com" \
+     --domains="www.example.com" \
+     --http \
+     --http.webroot=/var/www/acme \
+     --server="https://acme-staging-v02.api.letsencrypt.org/directory" \
+     --accept-tos \
+     run
+
+# 看到成功信息后，去掉 --server 参数，使用正式环境
+lego --email="admin@example.com" \
+     --domains="example.com" \
+     --domains="www.example.com" \
+     --http \
+     --http.webroot=/var/www/acme \
+     --accept-tos \
+     run
+```
+
+**第 5 步：部署证书到 Nginx**
+
+```bash
+# 合并证书链
+sudo mkdir -p /etc/nginx/certs
+cat .lego/certificates/example.com.crt \
+    .lego/certificates/example.com.issuer.crt \
+    | sudo tee /etc/nginx/certs/example.com.fullchain.pem > /dev/null
+
+# 复制私钥
+sudo cp .lego/certificates/example.com.key /etc/nginx/certs/example.com.key
+sudo chmod 600 /etc/nginx/certs/example.com.key
+```
+
+**第 6 步：配置 Nginx HTTPS**
+
+```nginx
+# /etc/nginx/conf.d/example.com.conf（更新后的完整配置）
+
+# HTTP 服务器：处理 ACME 验证 + 重定向到 HTTPS
+server {
+    listen 80;
+    server_name example.com www.example.com;
+
+    # ACME 验证路径（续期时需要）
+    location /.well-known/acme-challenge/ {
+        root /var/www/acme;
+    }
+
+    # 其他请求重定向到 HTTPS
+    location / {
+        return 301 https://$host$request_uri;
+    }
 }
 
+# HTTPS 服务器
 server {
     listen 443 ssl;
     server_name example.com www.example.com;
 
     # SSL 证书路径
-    ssl_certificate     /etc/nginx/certs/fullchain.pem;
-    ssl_certificate_key /etc/nginx/certs/privkey.pem;
+    ssl_certificate     /etc/nginx/certs/example.com.fullchain.pem;
+    ssl_certificate_key /etc/nginx/certs/example.com.key;
 
     # SSL 协议版本（推荐配置）
     ssl_protocols TLSv1.2 TLSv1.3;
@@ -612,6 +1189,81 @@ server {
     }
 }
 ```
+
+```bash
+# 测试并重新加载 Nginx
+sudo nginx -t && sudo nginx -s reload
+
+# 验证 HTTPS 是否生效
+curl -I https://example.com
+# 应该看到 HTTP/2 200 等响应
+```
+
+**第 7 步：验证证书信息**
+
+```bash
+# 查看证书详情
+echo | openssl s_client -connect example.com:443 -servername example.com 2>/dev/null \
+  | openssl x509 -noout -dates -subject -issuer
+# 输出类似：
+# subject=CN = example.com
+# issuer=C = US, O = Let's Encrypt, CN = E5
+# notBefore=May 12 00:00:00 2026 GMT
+# notAfter=Aug 10 23:59:59 2026 GMT
+```
+
+**第 8 步：设置自动续期**（参考上文"证书续期"部分的 crontab 配置）
+
+#### Docker Compose 一键部署示例（lego + Nginx）
+
+以下是一个使用 Docker Compose 同时运行 Nginx 和 lego 的完整配置：
+
+```yaml
+# compose.yaml
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./conf.d:/etc/nginx/conf.d:ro
+      - ./html:/usr/share/nginx/html:ro
+      - ./certs:/etc/nginx/certs:ro
+      - acme-challenge:/var/www/acme    # 共享 ACME 验证目录
+    restart: unless-stopped
+
+  # 一次性运行 lego 申请证书
+  # 只在首次部署或续期时运行
+  lego:
+    image: goacme/lego
+    container_name: lego
+    volumes:
+      - ./lego-data:/.lego              # 证书和账户数据
+      - ./certs:/certs                  # 导出证书给 Nginx
+      - acme-challenge:/var/www/acme    # 共享 ACME 验证目录
+    environment:
+      - DOMAINS=example.com,www.example.com
+      - EMAIL=admin@example.com
+    # 启动后运行申请命令，完成后自动退出
+    command: >
+      --email="${EMAIL}"
+      --domains="example.com"
+      --domains="www.example.com"
+      --http
+      --http.webroot=/var/www/acme
+      --path=/.lego
+      --accept-tos
+      run
+    # 申请成功后合并证书并复制到 /certs 目录
+    # （需要用 entrypoint 脚本处理，这里展示基本结构）
+
+volumes:
+  acme-challenge:
+```
+
+> 💡 **Docker 部署提示：** 实际生产中，建议编写一个 entrypoint 脚本来处理证书申请、合并和 Nginx reload 的完整流程，或者使用外部的定时任务来触发 `docker compose run lego renew`。
 
 ### 2.5 虚拟主机
 
@@ -1177,18 +1829,28 @@ docker exec nginx-proxy nginx -s reload
 
 ### 5.3 如何配置 HTTPS 并自动续期
 
+> 详细的 SSL/HTTPS 教程请参考 [2.4 SSL/HTTPS 配置](#24-sslhttps-配置) 章节，包含 Let's Encrypt + lego 的完整小白教程。
+
 ```bash
-# 第 1 步：安装 Certbot
-sudo apt-get install -y certbot python3-certbot-nginx
+# 快速流程（使用 lego ACME 客户端）：
 
-# 第 2 步：获取证书并自动配置（确保 DNS 已指向本服务器）
-sudo certbot --nginx -d example.com -d www.example.com
+# 第 1 步：安装 lego（下载二进制文件）
+curl -L -o lego.tar.gz https://github.com/go-acme/lego/releases/download/v4.22.1/lego_v4.22.1_linux_amd64.tar.gz
+tar xzf lego.tar.gz && sudo mv lego /usr/local/bin/
 
-# 第 3 步：验证自动续期
-sudo certbot renew --dry-run
+# 第 2 步：确保 Nginx 配置了 ACME 验证路径
+# 在 server 块中添加：
+# location /.well-known/acme-challenge/ { root /var/www/acme; }
+sudo mkdir -p /var/www/acme && sudo nginx -s reload
 
-# Certbot 会自动在 /etc/cron.d/certbot 中添加续期任务
-# 证书到期前 30 天自动续期
+# 第 3 步：获取证书（确保 DNS 已指向本服务器）
+lego --email="admin@example.com" --domains="example.com" --domains="www.example.com" \
+     --http --http.webroot=/var/www/acme --accept-tos run
+
+# 第 4 步：部署证书并配置 Nginx HTTPS（详见 2.4 节）
+
+# 第 5 步：设置自动续期（添加到 crontab）
+# 0 3 * * * /usr/local/bin/renew-cert.sh >> /var/log/lego-renew.log 2>&1
 ```
 
 ### 5.4 如何优化 Nginx 性能
@@ -1253,66 +1915,66 @@ awk '$4 >= "[15/Jan/2024:10:00" && $4 <= "[15/Jan/2024:12:00"' /var/log/nginx/ac
 
 ### 6.1 核心配置指令
 
-| 指令 | 作用域 | 说明 | 示例 |
-|------|--------|------|------|
-| `worker_processes` | main | Worker 进程数 | `auto` |
-| `worker_connections` | events | 每个 Worker 最大连接数 | `1024` |
-| `sendfile` | http/server/location | 零拷贝传输 | `on` |
-| `tcp_nopush` | http/server | 优化数据包发送 | `on` |
-| `keepalive_timeout` | http/server/location | 长连接超时 | `65` |
-| `gzip` | http/server/location | Gzip 压缩 | `on` |
-| `server_tokens` | http/server | 隐藏版本号 | `off` |
+| 指令                 | 作用域               | 说明                   | 示例   |
+| -------------------- | -------------------- | ---------------------- | ------ |
+| `worker_processes`   | main                 | Worker 进程数          | `auto` |
+| `worker_connections` | events               | 每个 Worker 最大连接数 | `1024` |
+| `sendfile`           | http/server/location | 零拷贝传输             | `on`   |
+| `tcp_nopush`         | http/server          | 优化数据包发送         | `on`   |
+| `keepalive_timeout`  | http/server/location | 长连接超时             | `65`   |
+| `gzip`               | http/server/location | Gzip 压缩              | `on`   |
+| `server_tokens`      | http/server          | 隐藏版本号             | `off`  |
 
 ### 6.2 反向代理指令
 
-| 指令 | 说明 | 常用值 |
-|------|------|--------|
-| `proxy_pass` | 后端服务地址 | `http://127.0.0.1:8080` |
-| `proxy_set_header` | 设置转发头 | `Host $host` |
-| `proxy_connect_timeout` | 连接后端超时 | `60s` |
-| `proxy_read_timeout` | 读取响应超时 | `60s` |
-| `proxy_send_timeout` | 发送请求超时 | `60s` |
-| `proxy_buffering` | 是否缓冲响应 | `on` |
-| `proxy_cache` | 使用的缓存区 | `api_cache` |
+| 指令                    | 说明         | 常用值                  |
+| ----------------------- | ------------ | ----------------------- |
+| `proxy_pass`            | 后端服务地址 | `http://127.0.0.1:8080` |
+| `proxy_set_header`      | 设置转发头   | `Host $host`            |
+| `proxy_connect_timeout` | 连接后端超时 | `60s`                   |
+| `proxy_read_timeout`    | 读取响应超时 | `60s`                   |
+| `proxy_send_timeout`    | 发送请求超时 | `60s`                   |
+| `proxy_buffering`       | 是否缓冲响应 | `on`                    |
+| `proxy_cache`           | 使用的缓存区 | `api_cache`             |
 
 ### 6.3 location 匹配规则
 
-| 修饰符 | 匹配方式 | 优先级 | 示例 |
-|--------|---------|--------|------|
-| `=` | 精确匹配 | 最高 | `location = /exact/path {}` |
-| `^~` | 前缀匹配（匹配后不检查正则） | 次高 | `location ^~ /images/ {}` |
-| `~` | 区分大小写的正则匹配 | 第三 | `location ~ \.php$ {}` |
-| `~*` | 不区分大小写的正则匹配 | 第三 | `location ~* \.(jpg\|png)$ {}` |
-| 无 | 普通前缀匹配 | 最低 | `location /api/ {}` |
+| 修饰符 | 匹配方式                     | 优先级 | 示例                           |
+| ------ | ---------------------------- | ------ | ------------------------------ |
+| `=`    | 精确匹配                     | 最高   | `location = /exact/path {}`    |
+| `^~`   | 前缀匹配（匹配后不检查正则） | 次高   | `location ^~ /images/ {}`      |
+| `~`    | 区分大小写的正则匹配         | 第三   | `location ~ \.php$ {}`         |
+| `~*`   | 不区分大小写的正则匹配       | 第三   | `location ~* \.(jpg\|png)$ {}` |
+| 无     | 普通前缀匹配                 | 最低   | `location /api/ {}`            |
 
 ### 6.4 常用内置变量
 
-| 变量 | 说明 |
-|------|------|
-| `$host` | 请求中的 Host 头（域名） |
-| `$remote_addr` | 客户端 IP 地址 |
-| `$request_uri` | 完整的请求 URI（含查询参数） |
-| `$uri` | 不含查询参数的 URI |
-| `$args` | 查询参数 |
-| `$scheme` | 协议（http/https） |
-| `$request_method` | 请求方法（GET/POST 等） |
-| `$status` | 响应状态码 |
-| `$http_user_agent` | 客户端 User-Agent |
-| `$upstream_addr` | 后端服务器地址 |
-| `$upstream_response_time` | 后端响应耗时 |
-| `$request_time` | 请求总耗时 |
+| 变量                      | 说明                         |
+| ------------------------- | ---------------------------- |
+| `$host`                   | 请求中的 Host 头（域名）     |
+| `$remote_addr`            | 客户端 IP 地址               |
+| `$request_uri`            | 完整的请求 URI（含查询参数） |
+| `$uri`                    | 不含查询参数的 URI           |
+| `$args`                   | 查询参数                     |
+| `$scheme`                 | 协议（http/https）           |
+| `$request_method`         | 请求方法（GET/POST 等）      |
+| `$status`                 | 响应状态码                   |
+| `$http_user_agent`        | 客户端 User-Agent            |
+| `$upstream_addr`          | 后端服务器地址               |
+| `$upstream_response_time` | 后端响应耗时                 |
+| `$request_time`           | 请求总耗时                   |
 
 ### 6.5 常用命令速查
 
-| 命令 | 说明 |
-|------|------|
-| `nginx` | 启动 Nginx |
-| `nginx -s stop` | 快速停止 |
-| `nginx -s quit` | 优雅停止 |
-| `nginx -s reload` | 重新加载配置 |
-| `nginx -t` | 测试配置语法 |
-| `nginx -v` | 查看版本 |
-| `nginx -V` | 查看版本和编译参数 |
+| 命令              | 说明               |
+| ----------------- | ------------------ |
+| `nginx`           | 启动 Nginx         |
+| `nginx -s stop`   | 快速停止           |
+| `nginx -s quit`   | 优雅停止           |
+| `nginx -s reload` | 重新加载配置       |
+| `nginx -t`        | 测试配置语法       |
+| `nginx -v`        | 查看版本           |
+| `nginx -V`        | 查看版本和编译参数 |
 
 ---
 
@@ -1429,12 +2091,12 @@ location / {
 
 ### 你已经学到了什么
 
-| 部分 | 核心收获 |
-|------|---------|
-| Nginx 基础 | 事件驱动架构、安装、配置文件层级、基础命令 |
-| 核心功能 | 静态服务、反向代理、负载均衡、SSL/HTTPS、虚拟主机 |
-| 进阶功能 | URL 重写、Gzip 压缩、缓存策略、访问控制、限流 |
-| Docker 部署 | 容器化 Nginx、多站点管理、Docker Compose 编排 |
+| 部分        | 核心收获                                           |
+| ----------- | -------------------------------------------------- |
+| Nginx 基础  | 事件驱动架构、安装、配置文件层级、基础命令         |
+| 核心功能    | 静态服务、反向代理、负载均衡、SSL/HTTPS、虚拟主机  |
+| 进阶功能    | URL 重写、Gzip 压缩、缓存策略、访问控制、限流      |
+| Docker 部署 | 容器化 Nginx、多站点管理、Docker Compose 编排      |
 | How-to 指南 | 502 排查、添加站点、HTTPS 配置、性能优化、日志分析 |
 
 ### 推荐的学习路径
@@ -1466,5 +2128,8 @@ location / {
 - [Nginx 官方文档](https://nginx.org/en/docs/)
 - [Nginx Docker 镜像](https://hub.docker.com/_/nginx)
 - [Let's Encrypt 官网](https://letsencrypt.org/)
+- [Let's Encrypt ACME 协议文档](https://letsencrypt.org/docs/challenge-types/)
+- [lego ACME 客户端（GitHub）](https://github.com/go-acme/lego)
+- [lego 支持的 DNS 服务商列表](https://go-acme.github.io/lego/dns/)
 - [Nginx 速查表](https://wangchujiang.com/reference/nginx.html)
 - [Mozilla SSL 配置生成器](https://ssl-config.mozilla.org/)
