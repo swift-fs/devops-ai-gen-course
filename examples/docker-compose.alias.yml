@@ -1,0 +1,95 @@
+# ============================================================
+# Docker + Nginx 网关部署案例 — 保留前缀转发方式（alias）
+# ============================================================
+#
+# 本文件演示「网关保留前缀转发 + 前端容器 alias 映射」的部署方式
+# 对比 docker-compose.all.yml（去前缀转发方式）
+#
+# 两种方式的核心区别：
+#
+#   docker-compose.all.yml（去前缀）：
+#     网关: proxy_pass http://app:80/;     ← 有尾斜杠，去掉前缀
+#     容器: location / { root ...; }       ← 直接从根目录找文件
+#
+#   本文件（保留前缀）：
+#     网关: proxy_pass http://app:80;      ← 无尾斜杠，保留前缀
+#     容器: location /vue-alias/ { alias ...; } ← alias 映射
+#
+# 使用方式：
+#   1. 先创建外部网络：docker network create gateway-network
+#   2. 一键启动全部：   docker compose -f docker-compose.alias.yml up -d --build
+#   3. 停止全部：       docker compose -f docker-compose.alias.yml down
+#
+# 访问地址：
+#   - Vue alias 方式：       http://localhost/vue-alias/
+#   - Vue alias 关于页：     http://localhost/vue-alias/about
+#   - React alias 方式：     http://localhost/react-alias/
+#   - React alias 关于页：   http://localhost/react-alias/about
+#   - 健康检查：             http://localhost/health
+#
+# ============================================================
+
+services:
+  # ========== Nginx 反向代理网关（保留前缀转发） ==========
+  nginx-gateway-alias:
+    build:
+      context: ./nginx-gateway-alias
+      dockerfile: Dockerfile
+    container_name: nginx-gateway-alias
+    ports:
+      - "80:80"
+    networks:
+      - gateway-network
+    restart: unless-stopped
+    depends_on:
+      vue-subdir-app-alias:
+        condition: service_started
+      react-subdir-app-alias:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost/health",
+        ]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+
+  # ========== Vue SPA — /vue-alias/ 路径（alias 方式） ==========
+  # 三层配置联动：
+  #   1. Vite base: '/vue-alias/'           → 构建产物中资源引用带前缀
+  #   2. Vue Router: createWebHistory('/vue-alias/') → 前端路由匹配
+  #   3. 容器 Nginx: location /vue-alias/ { alias ...; } → 文件映射
+  vue-subdir-app-alias:
+    build:
+      context: ./vue-subdir-app-alias
+      dockerfile: Dockerfile
+    container_name: vue-subdir-app-alias
+    networks:
+      - gateway-network
+    restart: unless-stopped
+
+  # ========== React SPA — /react-alias/ 路径（alias 方式） ==========
+  # 三层配置联动：
+  #   1. Vite base: '/react-alias/'          → 构建产物中资源引用带前缀
+  #   2. React Router: BrowserRouter basename="/react-alias" → 前端路由匹配
+  #   3. 容器 Nginx: location /react-alias/ { alias ...; } → 文件映射
+  react-subdir-app-alias:
+    build:
+      context: ./react-subdir-app-alias
+      dockerfile: Dockerfile
+    container_name: react-subdir-app-alias
+    networks:
+      - gateway-network
+    restart: unless-stopped
+
+# 外部网络 — 必须手动创建：docker network create gateway-network
+networks:
+  gateway-network:
+    external: true

@@ -367,6 +367,174 @@ location @backend {
 }
 ```
 
+#### `root` 与 `alias` 指令详解
+
+在 Nginx 中，`root` 和 `alias` 都用于指定静态文件的磁盘路径，但它们的路径拼接方式完全不同。这是 Nginx 配置中最容易踩坑的地方之一。
+
+##### `root` 指令：路径拼接
+
+`root` 指令会将 **location 的 URI 拼接到 root 路径后面**，构成最终文件路径。
+
+```
+最终文件路径 = root 值 + 请求 URI
+```
+
+```nginx
+# 示例配置
+location /images/ {
+    root /data/www;
+}
+
+# 请求：GET /images/logo.png
+# 实际查找文件：/data/www/images/logo.png
+#                ^^^^^^^^^ ^^^^^^^^^^^^^^^^
+#                root 值    URI 路径（location 匹配的部分也包含在内）
+```
+
+`root` 可以出现在 `http`、`server`、`location` 三个层级中，下级会覆盖上级：
+
+```nginx
+server {
+    root /var/www/html;              # 全局默认根目录
+
+    location / {
+        # 使用 server 级别的 root：/var/www/html
+    }
+
+    location /images/ {
+        root /data/media;            # 覆盖 server 级别的 root
+        # 请求 /images/photo.jpg → /data/media/images/photo.jpg
+    }
+
+    location /downloads/ {
+        root /data/files;
+        # 请求 /downloads/report.pdf → /data/files/downloads/report.pdf
+    }
+}
+```
+
+##### `alias` 指令：路径替换
+
+`alias` 指令会用 **alias 的值直接替换掉 location 匹配的 URI 部分**。
+
+```
+最终文件路径 = alias 值 + (请求 URI 去掉 location 匹配部分后的剩余路径)
+```
+
+```nginx
+# 示例配置
+location /images/ {
+    alias /data/www/photos/;
+}
+
+# 请求：GET /images/logo.png
+# 实际查找文件：/data/www/photos/logo.png
+#                ^^^^^^^^^^^^^^^^^ ^^^^^^^^^^
+#                alias 值（替换了 /images/） URI 剩余部分
+```
+
+##### 关键区别对比
+
+| 对比项 | `root` | `alias` |
+| --- | --- | --- |
+| **路径拼接方式** | root + 完整 URI | alias 替换 location 匹配部分 |
+| **适用层级** | `http`、`server`、`location` | **仅** `location` |
+| **正则 location** | 可用 | 可用（但需捕获组 `$1`） |
+| **目录尾部斜杠** | 不要求 | location 和 alias **必须一致**（都有或都没有） |
+| **是否修改 URI** | 不修改 | 本质上是一种 URI 重写 |
+
+##### 完整对比示例
+
+假设磁盘上的文件结构如下：
+
+```
+/data/
+├── www/
+│   ├── images/          ← 注意：目录名叫 images
+│   │   ├── logo.png
+│   │   └── banner.jpg
+│   └── index.html
+└── assets/
+    ├── css/
+    │   └── style.css
+    └── js/
+        └── app.js
+```
+
+**用 `root` 实现：URL 路径和磁盘目录名一致**
+
+```nginx
+server {
+    listen 80;
+    server_name example.com;
+
+    # 默认根目录
+    root /data/www;
+
+    # URL: /images/logo.png → 文件: /data/www/images/logo.png ✅
+    location /images/ {
+        # 继承 server 级别的 root，无需额外配置
+    }
+
+    # URL: /assets/css/style.css → 文件: /data/www/assets/css/style.css ✅
+    # 前提：/data/www/assets/ 目录存在
+}
+```
+
+**用 `alias` 实现：URL 路径和磁盘目录名不同**
+
+```nginx
+server {
+    listen 80;
+    server_name example.com;
+
+    # 将 /img/ 路径映射到 /data/www/images/ 目录
+    # URL: /img/logo.png → 文件: /data/www/images/logo.png ✅
+    location /img/ {
+        alias /data/www/images/;
+        # 注意：/img/ 和 /data/www/images/ 末尾都有斜杠，必须一致
+    }
+
+    # 将 /static/ 路径映射到 /data/assets/ 目录
+    # URL: /static/css/style.css → 文件: /data/assets/css/style.css ✅
+    location /static/ {
+        alias /data/assets/;
+    }
+}
+```
+
+**用 `alias` + 正则表达式实现灵活映射**
+
+```nginx
+# 正则 location 中使用 alias，必须通过捕获组引用
+location ~ ^/users/(.+\.(?:gif|jpe?g|png))$ {
+    alias /data/avatars/$1;
+    # 请求 /users/alice.png → 文件 /data/avatars/alice.png
+    # 请求 /users/bob.jpg   → 文件 /data/avatars/bob.jpg
+}
+```
+
+##### 什么时候用 `root`？什么时候用 `alias`？
+
+```
+决策流程：
+
+  URL 路径和磁盘目录名是否一致？
+      │
+      ├── 是 → 使用 root（推荐，更简单安全）
+      │        例：URL /images/ → 磁盘 /data/www/images/
+      │
+      └── 否 → 使用 alias
+               例：URL /img/ → 磁盘 /data/www/images/
+               例：URL /static/ → 磁盘 /data/assets/
+```
+
+> ⚠️ **使用 `alias` 时的常见陷阱：**
+>
+> 1. **末尾斜杠必须一致**：`location /img/` 配 `alias /data/images/;`（都有斜杠）✅；`location /img` 配 `alias /data/images;`（都没斜杠）✅；一个有一个没有 ❌。
+> 2. **`alias` 只能在 `location` 中使用**：不能放在 `server` 或 `http` 级别。
+> 3. **正则 location 中使用 `alias` 时**，alias 路径中必须包含捕获组引用（如 `$1`），否则整个匹配的 URI 会丢失。
+
 ### 2.2 反向代理
 
 反向代理是 Nginx 最常用的功能——客户端请求 Nginx，Nginx 再将请求转发给后端服务器。

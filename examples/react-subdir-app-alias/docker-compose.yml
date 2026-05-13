@@ -1,0 +1,13 @@
+services:
+  react-subdir-app-alias:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: react-subdir-app-alias
+    networks:
+      - gateway-network
+    restart: unless-stopped
+
+networks:
+  gateway-network:
+    external: true

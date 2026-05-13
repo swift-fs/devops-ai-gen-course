@@ -1,0 +1,13 @@
+services:
+  vue-subdir-app-alias:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vue-subdir-app-alias
+    networks:
+      - gateway-network
+    restart: unless-stopped
+
+networks:
+  gateway-network:
+    external: true

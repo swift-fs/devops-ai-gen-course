@@ -1,0 +1,34 @@
+# Nginx 网关 - 独立的 Docker Compose 文件
+# 使用方式：docker compose up -d
+# 注意：需要先启动后端服务（各案例目录下的 docker-compose.yml）
+#       或使用根目录的 docker-compose.all.yml 一键启动全部
+
+services:
+  nginx-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nginx-gateway
+    ports:
+      - "80:80"
+    networks:
+      - gateway-network
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost/health",
+        ]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+
+networks:
+  gateway-network:
+    external: true

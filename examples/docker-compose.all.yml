@@ -1,0 +1,139 @@
+# ============================================================
+# Docker + Nginx 网关部署案例 — 一键启动全部服务
+# ============================================================
+#
+# ⚠️ 仅用于本地演示。生产环境建议网关独立部署，不与业务编排在一起。
+#
+# 使用方式：
+#   1. 先创建外部网络：docker network create gateway-network
+#   2. 一键启动全部：   docker compose -f docker-compose.all.yml up -d --build
+#   3. 停止全部：       docker compose -f docker-compose.all.yml down
+#
+# 访问地址（所有前端都部署在二级目录下）：
+#   - Vue 单页应用：            http://localhost/vue/
+#   - Vue 单页应用（关于页）：  http://localhost/vue/about
+#   - React 单页应用：          http://localhost/react/
+#   - React 单页应用（关于页）：http://localhost/react/about
+#   - Go API 服务：             http://localhost/api/hello
+#   - Vue 二级目录应用：        http://localhost/vue-sub/
+#   - Vue 二级目录（关于页）：  http://localhost/vue-sub/about
+#   - React 二级目录应用：      http://localhost/react-sub/
+#   - React 二级目录（关于页）：http://localhost/react-sub/about
+#   - Node API 服务：           http://localhost/node/hello
+#   - 健康检查：                http://localhost/health
+#
+# 注意：gateway-network 是外部网络，必须手动创建
+#       docker network create gateway-network
+#
+# ============================================================
+
+services:
+  # ========== Nginx 反向代理网关（独立服务，生产环境应单独部署） ==========
+  nginx-gateway:
+    build:
+      context: ./nginx-gateway
+      dockerfile: Dockerfile
+    container_name: nginx-gateway
+    ports:
+      - "80:80"
+    networks:
+      - gateway-network
+    restart: unless-stopped
+    depends_on:
+      vue-app:
+        condition: service_started
+      react-app:
+        condition: service_started
+      go-app:
+        condition: service_started
+      vue-subdir-app:
+        condition: service_started
+      react-subdir-app:
+        condition: service_started
+      node-app:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+
+  # ========== Vue 单页应用 — /vue/ 路径 ==========
+  # 三层配置联动：Vite base + Vue Router base + 网关 proxy_pass 去前缀
+  vue-app:
+    build:
+      context: ./vue-app
+      dockerfile: Dockerfile
+    container_name: vue-app
+    networks:
+      - gateway-network
+    restart: unless-stopped
+
+  # ========== React 单页应用 — /react/ 路径 ==========
+  # 三层配置联动：Vite base + React Router basename + 网关 proxy_pass 去前缀
+  react-app:
+    build:
+      context: ./react-app
+      dockerfile: Dockerfile
+    container_name: react-app
+    networks:
+      - gateway-network
+    restart: unless-stopped
+
+  # ========== Go API 服务（GoFrame 框架）— /api/ 路径 ==========
+  go-app:
+    build:
+      context: ./go-app
+      dockerfile: Dockerfile
+    container_name: go-app
+    networks:
+      - gateway-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+
+  # ========== Vue 单页应用 — /vue-sub/ 路径（多路由页面） ==========
+  vue-subdir-app:
+    build:
+      context: ./vue-subdir-app
+      dockerfile: Dockerfile
+    container_name: vue-subdir-app
+    networks:
+      - gateway-network
+    restart: unless-stopped
+
+  # ========== React 单页应用 — /react-sub/ 路径（多路由页面） ==========
+  react-subdir-app:
+    build:
+      context: ./react-subdir-app
+      dockerfile: Dockerfile
+    container_name: react-subdir-app
+    networks:
+      - gateway-network
+    restart: unless-stopped
+
+  # ========== Node.js API 服务（Express）— /node/ 路径 ==========
+  node-app:
+    build:
+      context: ./node-app
+      dockerfile: Dockerfile
+    container_name: node-app
+    networks:
+      - gateway-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+
+# 外部网络 — 必须手动创建：docker network create gateway-network
+networks:
+  gateway-network:
+    external: true
